@@ -130,40 +130,83 @@ async function compileJSXTemplate(jsxPath, outputPath) {
     console.log(`🔄 Compiling JSX: ${jsxPath}`);
     
     // Read the JSX file
+    console.log(`📖 Reading JSX file...`);
     const jsxContent = fs.readFileSync(jsxPath, 'utf-8');
+    console.log(`📄 JSX content length: ${jsxContent.length} characters`);
+    console.log(`📄 First 100 chars: ${jsxContent.substring(0, 100)}...`);
     
     // Compile to HTML
+    console.log(`🔧 Starting Babel compilation...`);
     const htmlContent = await compileJSXToHTML(jsxContent);
+    console.log(`📄 Compiled HTML length: ${htmlContent.length} characters`);
     
     // Write the compiled HTML
+    console.log(`💾 Writing compiled HTML to: ${outputPath}`);
     fs.writeFileSync(outputPath, htmlContent);
-    console.log(`✅ Compiled successfully: ${outputPath}`);
+    console.log(`✅ Successfully compiled: ${jsxPath} → ${outputPath}`);
     
   } catch (error) {
-    console.error(`❌ Compilation failed for ${jsxPath}:`, error);
+    console.error(`💥 COMPILATION FAILED for ${jsxPath}:`);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    throw error; // Re-throw so main script can catch it
   }
 }
 
 // Auto-execute if this script is run directly
 if (require.main === module) {
-  // Scan for all shape-*/template.jsx files
-  const currentDir = process.cwd();
-  const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+  console.log('🚀 STARTING JSX COMPILATION SCRIPT');
+  console.log('📂 Working directory:', process.cwd());
   
-  const shapeDirectories = entries
-    .filter(entry => entry.isDirectory() && entry.name.startsWith('shape-'))
-    .map(entry => entry.name);
-  
-  console.log(`🔍 Found ${shapeDirectories.length} widget directories: ${shapeDirectories.join(', ')}`);
-  
-  // Compile each widget's JSX
-  for (const shapeDir of shapeDirectories) {
-    const jsxPath = path.join(currentDir, shapeDir, 'template.jsx');
-    if (fs.existsSync(jsxPath)) {
-      const outputPath = jsxPath.replace('.jsx', '.html');
-      compileJSXTemplate(jsxPath, outputPath);
+  try {
+    // Scan for all shape-*/template.jsx files
+    const currentDir = process.cwd();
+    console.log('📁 Scanning directory:', currentDir);
+    
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    console.log('📋 All entries:', entries.map(e => `${e.name} (${e.isDirectory() ? 'dir' : 'file'})`).join(', '));
+    
+    const shapeDirectories = entries
+      .filter(entry => entry.isDirectory() && entry.name.startsWith('shape-'))
+      .map(entry => entry.name);
+    
+    console.log(`🔍 Found ${shapeDirectories.length} widget directories: ${shapeDirectories.join(', ')}`);
+    
+    if (shapeDirectories.length === 0) {
+      console.log('⚠️ NO WIDGET DIRECTORIES FOUND! Looking for directories that start with "shape-"');
+      console.log('📁 Available directories:', entries.filter(e => e.isDirectory()).map(e => e.name).join(', '));
+      process.exit(0);
     }
+    
+    let compiledCount = 0;
+    
+    // Compile each widget's JSX
+    for (const shapeDir of shapeDirectories) {
+      const jsxPath = path.join(currentDir, shapeDir, 'template.jsx');
+      console.log(`🔄 Checking for JSX file: ${jsxPath}`);
+      
+      if (fs.existsSync(jsxPath)) {
+        console.log(`✅ JSX file exists, compiling...`);
+        const outputPath = jsxPath.replace('.jsx', '.html');
+        await compileJSXTemplate(jsxPath, outputPath);
+        compiledCount++;
+      } else {
+        console.log(`❌ JSX file NOT FOUND: ${jsxPath}`);
+        console.log(`📁 Contents of ${shapeDir}:`, fs.readdirSync(path.join(currentDir, shapeDir)));
+      }
+    }
+    
+    console.log(`🎉 JSX compilation complete! Compiled ${compiledCount} files.`);
+    
+    if (compiledCount === 0) {
+      console.log('⚠️ WARNING: No files were compiled!');
+      process.exit(1);
+    }
+    
+  } catch (error) {
+    console.error('💥 FATAL ERROR in main execution:');
+    console.error('Error message:', error.message);
+    console.error('Stack trace:', error.stack);
+    process.exit(1);
   }
-  
-  console.log('🎉 JSX compilation complete!');
 }
