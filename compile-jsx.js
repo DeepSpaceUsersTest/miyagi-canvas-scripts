@@ -8,29 +8,15 @@
 const fs = require('fs');
 const path = require('path');
 
-// Ensure Babel is available - install if needed
+// Require Babel (should be installed by setup script)
 let babel;
 try {
   babel = require('@babel/core');
 } catch (e) {
-  console.log('📦 Babel not found - installing @babel/core and @babel/preset-react...');
-  
-  // Install Babel dependencies
-  const { execSync } = require('child_process');
-  try {
-    execSync('npm install @babel/core @babel/preset-react', { 
-      stdio: 'inherit',
-      cwd: process.cwd()
-    });
-    
-    // Try to require again after installation
-    babel = require('@babel/core');
-    console.log('✅ Babel installed successfully');
-  } catch (installError) {
-    console.error('❌ Failed to install Babel:', installError.message);
-    console.error('Please run: npm install @babel/core @babel/preset-react');
-    process.exit(1);
-  }
+  console.error('❌ Babel not found. Please run the setup script first:');
+  console.error('   curl -s https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/main/setup-repo.js | node');
+  console.error('   Or manually install: npm install @babel/core @babel/preset-react');
+  process.exit(1);
 }
 
 // Babel configuration for JSX compilation
