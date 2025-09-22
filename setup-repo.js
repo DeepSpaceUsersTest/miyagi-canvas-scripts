@@ -82,29 +82,23 @@ if [ -z "$GITHUB_TOKEN" ]; then
   exit 1
 fi
 
-        # Compile JSX templates to HTML
-        echo "📝 Compiling JSX templates..."
-        curl -H "Authorization: token $GITHUB_TOKEN" -s https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/main/compile-jsx.cjs > /tmp/compile-jsx.cjs
-        node /tmp/compile-jsx.cjs
-        COMPILE_EXIT_CODE=$?
-        rm -f /tmp/compile-jsx.cjs
+# Compile JSX templates to HTML
+echo "📝 Compiling JSX templates..."
+curl -H "Authorization: token $GITHUB_TOKEN" -s https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/main/compile-jsx.js | node
 
-        if [ $COMPILE_EXIT_CODE -ne 0 ]; then
-          echo "❌ JSX compilation failed"
-          exit 1
-        fi
+if [ $? -ne 0 ]; then
+  echo "❌ JSX compilation failed"
+  exit 1
+fi
 
-        # Generate canvas state JSON
-        echo "🎨 Generating canvas state..."
-        curl -H "Authorization: token $GITHUB_TOKEN" -s https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/main/generate-canvas.js > /tmp/generate-canvas.js
-        node /tmp/generate-canvas.js
-        CANVAS_EXIT_CODE=$?
-        rm -f /tmp/generate-canvas.js
+# Generate canvas state JSON
+echo "🎨 Generating canvas state..."
+curl -H "Authorization: token $GITHUB_TOKEN" -s https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/main/generate-canvas.js | node
 
-        if [ $CANVAS_EXIT_CODE -ne 0 ]; then
-          echo "❌ Canvas state generation failed"
-          exit 1
-        fi
+if [ $? -ne 0 ]; then
+  echo "❌ Canvas state generation failed"
+  exit 1
+fi
 
 # Add generated files to the commit
 echo "📦 Adding generated files to commit..."
