@@ -2,6 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const babel = require('@babel/core');
 
+// Get the absolute path to the babel preset (relative to this script)
+const babelPresetPath = path.join(__dirname, 'node_modules', '@babel', 'preset-react');
+
 // Find widgets
 const entries = fs.readdirSync('.', { withFileTypes: true });
 const widgets = entries.filter(e => e.isDirectory() && e.name.startsWith('shape-'));
