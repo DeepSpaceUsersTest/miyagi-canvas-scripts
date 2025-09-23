@@ -22,7 +22,7 @@ widgets.forEach(widget => {
     const jsx = fs.readFileSync(jsxFile, 'utf8');
     
     const result = babel.transformSync(jsx, {
-      presets: [['@babel/preset-react', { runtime: 'classic' }]]
+      presets: [[babelPresetPath, { runtime: 'classic' }]] // Use absolute path
     });
     
     const html = `<!DOCTYPE html>

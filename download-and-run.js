@@ -16,7 +16,7 @@ const { execSync } = require('child_process');
 
 // Configuration
 const SCRIPTS_DIR = '.miyagi';
-const SCRIPTS_URL = 'https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/98017c3fbfd5a04463621d2319d277f792bd55c0';
+const SCRIPTS_URL = 'https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/main';
 
 /**
  * Ensure Miyagi setup exists (one-time setup per repository)
@@ -91,7 +91,7 @@ async function downloadScript(scriptName) {
     
     console.log(`  📄 Downloading ${scriptName}...`);
     
-    // Use fetch if available (Node 18+) or fallback to https module
+    // Use raw GitHub URLs (works with public repos)
     let content;
     if (typeof fetch !== 'undefined') {
       const response = await fetch(`${SCRIPTS_URL}/${scriptName}`);
