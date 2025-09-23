@@ -59,7 +59,8 @@ async function ensureSetup() {
       const scripts = [
         'compile.js', 
         'generate-canvas.js', 
-        'unpack-canvas-state.js'
+        'unpack-canvas-state.js',
+        'setup-hooks.js'
       ];
       
       console.log('📥 Downloading scripts...');
