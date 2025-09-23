@@ -1,6 +1,6 @@
 /**
  * Canvas State Generation Script
- * Generates canvas-state.json from all widgets
+ * Generates canvas-state.json from all widgets and sub-canvases
  */
 
 const fs = require('fs');
@@ -10,27 +10,73 @@ function generateCanvasState() {
   console.log('🎨 Generating canvas state...');
   
   const currentDir = process.cwd();
-  const entries = fs.readdirSync(currentDir, { withFileTypes: true });
   
-  // Find all widget directories
+  // Process root canvas and all sub-canvases
+  const canvasData = processCanvas(currentDir, true);
+  
+  if (!canvasData) {
+    console.log('⚠️ No canvas data found - exiting');
+    return null;
+  }
+  
+  // Generate tldraw RoomSnapshot
+  const roomSnapshot = generateRoomSnapshot(canvasData);
+  
+  // Write canvas-state.json
+  const outputPath = path.join(currentDir, 'canvas-state.json');
+  fs.writeFileSync(outputPath, JSON.stringify(roomSnapshot, null, 2));
+  
+  console.log(`✅ Generated canvas-state.json with ${canvasData.widgets.length} widgets`);
+  return true;
+}
+
+function processCanvas(canvasDir, isRoot = false) {
+  const entries = fs.readdirSync(canvasDir, { withFileTypes: true });
+  
+  // Find widget directories
   const shapeDirectories = entries
     .filter(entry => entry.isDirectory() && entry.name.startsWith('shape-'))
     .map(entry => entry.name);
   
-  console.log(`📁 Found ${shapeDirectories.length} widget directories: ${shapeDirectories.join(', ')}`);
+  console.log(`📁 Found ${shapeDirectories.length} widget directories in ${isRoot ? 'root' : path.basename(canvasDir)}: ${shapeDirectories.join(', ')}`);
   
-  if (shapeDirectories.length === 0) {
-    console.log('⚠️ No widget directories found - exiting');
-    return null;
+  // Load canvas metadata
+  let canvasMetadata = null;
+  const metadataPath = path.join(canvasDir, 'canvas-metadata.json');
+  if (fs.existsSync(metadataPath)) {
+    try {
+      canvasMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    } catch (error) {
+      console.error(`❌ Error loading canvas metadata from ${metadataPath}:`, error);
+    }
   }
   
-  const widgets = {};
+  // Load global storage
+  let globalStorage = {};
+  const globalStoragePath = path.join(canvasDir, 'global-storage.json');
+  if (fs.existsSync(globalStoragePath)) {
+    try {
+      const storageData = JSON.parse(fs.readFileSync(globalStoragePath, 'utf8'));
+      globalStorage = storageData.global || {};
+    } catch (error) {
+      console.error(`❌ Error loading global storage from ${globalStoragePath}:`, error);
+    }
+  }
+  
+  const widgets = [];
+  const widgetStorage = {};
   
   // Load each widget
   for (const shapeId of shapeDirectories) {
     console.log(`🔄 Processing widget: ${shapeId}`);
-    const widgetDir = path.join(currentDir, shapeId);
-    const widget = { properties: null, jsxTemplate: null, htmlTemplate: null };
+    const widgetDir = path.join(canvasDir, shapeId);
+    const widget = { 
+      shapeId,
+      properties: null, 
+      jsxTemplate: null, 
+      htmlTemplate: null,
+      storage: {}
+    };
     
     try {
       // Load properties.json
@@ -51,8 +97,29 @@ function generateCanvasState() {
         widget.htmlTemplate = fs.readFileSync(htmlPath, 'utf8');
       }
       
+      // Load storage.json
+      const storagePath = path.join(widgetDir, 'storage.json');
+      if (fs.existsSync(storagePath)) {
+        try {
+          const storageData = JSON.parse(fs.readFileSync(storagePath, 'utf8'));
+          widget.storage = storageData;
+        } catch (error) {
+          console.error(`❌ Error loading storage for ${shapeId}:`, error);
+        }
+      }
+      
       if (widget.properties && widget.jsxTemplate && widget.htmlTemplate) {
-        widgets[shapeId] = widget;
+        widgets.push(widget);
+        
+        // Extract widget config for canvas_storage after all data is loaded
+        if (widget.storage.__widget_config) {
+          // Use the actual shape ID from properties, not the directory name
+          const actualShapeId = widget.properties.id || `shape:${shapeId}`;
+          widgetStorage[actualShapeId] = {
+            __widget_config: widget.storage.__widget_config
+          };
+        }
+        
         console.log(`✅ Loaded widget: ${shapeId}`);
       } else {
         console.log(`⚠️ Skipping incomplete widget: ${shapeId}`);
@@ -63,82 +130,110 @@ function generateCanvasState() {
     }
   }
   
-  // Generate tldraw RoomSnapshot
-  const roomSnapshot = generateRoomSnapshot(widgets);
-  
-  // Write canvas-state.json
-  const outputPath = path.join(currentDir, 'canvas-state.json');
-  fs.writeFileSync(outputPath, JSON.stringify(roomSnapshot, null, 2));
-  
-  console.log(`✅ Generated canvas-state.json with ${Object.keys(widgets).length} widgets`);
-  return true;
+  return {
+    canvasMetadata,
+    globalStorage,
+    widgetStorage,
+    widgets,
+    isRoot
+  };
 }
 
-function generateRoomSnapshot(widgets) {
+function generateRoomSnapshot(canvasData) {
+  const { canvasMetadata, globalStorage, widgetStorage, widgets } = canvasData;
+  
+  // Extract canvas info from metadata
+  const roomId = canvasMetadata?.canvas?.roomId || 'room-generated';
+  const canvasMode = canvasMetadata?.canvas?.canvasMode || 'freeform';
+  const canvasName = canvasMetadata?.canvas?.canvasName || 'Generated Canvas';
+  const gridSize = canvasMetadata?.canvas?.gridSize || 10;
+  const pageId = canvasMetadata?.page?.id || 'page:page';
+  const pageName = canvasMetadata?.page?.name || 'Page 1';
+  
   const documents = [
+    // Document record
     {
       state: {
-        gridSize: 10,
+        gridSize: gridSize,
         name: '',
-        meta: {},
+        meta: {
+          roomId: roomId,
+          canvasMode: canvasMode,
+          canvasName: canvasName
+        },
         id: 'document:document',
         typeName: 'document'
       },
-      lastChangedClock: 0
+      lastChangedClock: 2
     },
+    // Page record
     {
       state: {
         meta: {},
-        id: 'page:page',
-        name: 'Page 1',
+        id: pageId,
+        name: pageName,
         index: 'a1',
         typeName: 'page'
       },
       lastChangedClock: 0
+    },
+    // Canvas storage record - CRITICAL for widget storage
+    {
+      state: {
+        widgets: widgetStorage,
+        global: globalStorage,
+        id: 'canvas_storage:main',
+        typeName: 'canvas_storage'
+      },
+      lastChangedClock: widgets.length + 2
     }
   ];
 
+  // Add widget shape records
   let widgetIndex = 1;
-  for (const [shapeId, widget] of Object.entries(widgets)) {
+  for (const widget of widgets) {
+    const shapeId = widget.shapeId;
+    const props = widget.properties;
+    
     const widgetDocument = {
       state: {
-        id: `shape:${shapeId}`,
+        id: props.id || `shape:${shapeId}`,
         typeName: 'shape',
         type: 'miyagi-widget',
-        parentId: 'page:page',
-        index: `a${widgetIndex}`,
-        x: widget.properties.x || (widgetIndex * 50),
-        y: widget.properties.y || (widgetIndex * 50),
-        rotation: 0,
-        isLocked: false,
-        opacity: 1,
+        parentId: props.parentId || pageId,
+        index: props.index || `a${widgetIndex}`,
+        x: props.x || (widgetIndex * 50),
+        y: props.y || (widgetIndex * 50),
+        rotation: props.rotation || 0,
+        isLocked: props.isLocked || false,
+        opacity: props.opacity || 1,
+        meta: props.meta || {
+          initializationState: 'ready'
+        },
         props: {
-          w: widget.properties.w || 200,
-          h: widget.properties.h || 150,
-          widgetId: `github-${shapeId}`,
-          templateHandle: widget.properties.templateHandle || 'notepad-react-test',
+          w: props.w || 300,
+          h: props.h || 200,
+          widgetId: props.widgetId || `${props.templateHandle || 'widget'}_${Date.now()}`,
+          templateHandle: props.templateHandle || 'notepad-react-test',
           htmlContent: widget.htmlTemplate,
           jsxContent: widget.jsxTemplate,
-          color: widget.properties.color || 'black',
-          zoomScale: 1,
-          isFullscreen: false,
-        },
-        meta: {
-          githubSync: true,
-          shapeId: shapeId,
-          lastUpdated: new Date().toISOString()
+          color: props.color || 'black',
+          zoomScale: props.zoomScale || 1
         }
       },
-      lastChangedClock: widgetIndex
+      lastChangedClock: widgetIndex + 2
     };
 
     documents.push(widgetDocument);
     widgetIndex++;
   }
 
+  // Calculate proper clock values
+  const totalClock = documents.length + 1;
+
   return {
-    clock: documents.length,
-    documentClock: documents.length,
+    clock: totalClock,
+    documentClock: totalClock,
     tombstones: {},
     tombstoneHistoryStartsAtClock: 1,
     schema: {
