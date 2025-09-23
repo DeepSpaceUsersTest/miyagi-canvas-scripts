@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Canvas State Generation Script
  * Generates canvas-state.json from all widgets
