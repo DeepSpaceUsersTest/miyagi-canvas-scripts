@@ -111,13 +111,12 @@ function processCanvas(canvasDir, isRoot = false) {
       if (widget.properties && widget.jsxTemplate && widget.htmlTemplate) {
         widgets.push(widget);
         
-        // Extract widget config for canvas_storage after all data is loaded
-        if (widget.storage.__widget_config) {
+        // Extract entire widget storage for canvas_storage after all data is loaded
+        if (widget.storage) {
           // Use the actual shape ID from properties
           const actualShapeId = widget.properties.shapeId || widget.properties.id || `shape:${shapeId}`;
-          widgetStorage[actualShapeId] = {
-            __widget_config: widget.storage.__widget_config
-          };
+          // Include the entire storage object, not just __widget_config
+          widgetStorage[actualShapeId] = widget.storage;
         }
         
         console.log(`✅ Loaded widget: ${shapeId}`);
