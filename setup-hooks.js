@@ -44,7 +44,7 @@ const postMergeHook = `#!/bin/sh
 echo "📦 Running Miyagi post-merge hook..."
 
 # Run unpack-canvas-state.js to extract widget files from canvas-state.json
-node download-and-run.js unpack-canvas-state.js
+node .miyagi/unpack-canvas-state.js
 if [ $? -ne 0 ]; then
   echo "❌ Canvas state unpacking failed"
   exit 1
