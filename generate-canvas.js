@@ -3,7 +3,6 @@
  * Generates canvas-state.json from all widgets
  */
 
-console.log('🚀 Script starting...');
 const fs = require('fs');
 const path = require('path');
 
