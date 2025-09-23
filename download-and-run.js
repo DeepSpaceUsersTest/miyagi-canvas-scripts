@@ -16,7 +16,7 @@ const { execSync } = require('child_process');
 
 // Configuration
 const SCRIPTS_DIR = '.miyagi';
-const SCRIPTS_URL = 'https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/main';
+const SCRIPTS_URL = 'https://raw.githubusercontent.com/DeepSpaceUsersTest/miyagi-canvas-scripts/98017c3fbfd5a04463621d2319d277f792bd55c0';
 
 /**
  * Ensure Miyagi setup exists (one-time setup per repository)
