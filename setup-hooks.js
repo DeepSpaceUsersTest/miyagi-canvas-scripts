@@ -61,6 +61,19 @@ try {
     process.exit(1);
   }
 
+  // Download scripts if they don't exist
+  console.log('📥 Ensuring Miyagi scripts are available...');
+  if (fs.existsSync('download-and-run.js')) {
+    console.log('🔄 Running download-and-run to ensure scripts are ready...');
+    const { execSync } = require('child_process');
+    
+    // Use download-and-run to ensure all scripts are available
+    execSync('node download-and-run.js compile.js', { stdio: 'inherit' });
+    console.log('✅ Scripts are ready');
+  } else {
+    console.log('⚠️  download-and-run.js not found. Scripts will be downloaded on first hook run.');
+  }
+
   // Write pre-commit hook
   const preCommitPath = path.join(hooksDir, 'pre-commit');
   fs.writeFileSync(preCommitPath, preCommitHook);
