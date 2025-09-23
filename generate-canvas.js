@@ -113,8 +113,8 @@ function processCanvas(canvasDir, isRoot = false) {
         
         // Extract widget config for canvas_storage after all data is loaded
         if (widget.storage.__widget_config) {
-          // Use the actual shape ID from properties, not the directory name
-          const actualShapeId = widget.properties.id || `shape:${shapeId}`;
+          // Use the actual shape ID from properties
+          const actualShapeId = widget.properties.shapeId || widget.properties.id || `shape:${shapeId}`;
           widgetStorage[actualShapeId] = {
             __widget_config: widget.storage.__widget_config
           };
@@ -147,8 +147,9 @@ function generateRoomSnapshot(canvasData) {
   const canvasMode = canvasMetadata?.canvas?.canvasMode || 'freeform';
   const canvasName = canvasMetadata?.canvas?.canvasName || 'Generated Canvas';
   const gridSize = canvasMetadata?.canvas?.gridSize || 10;
-  const pageId = canvasMetadata?.page?.id || 'page:page';
-  const pageName = canvasMetadata?.page?.name || 'Page 1';
+  const pageId = canvasMetadata?.pages?.[0]?.id || 'page:page';
+  const pageName = canvasMetadata?.pages?.[0]?.name || 'Page 1';
+  
   
   const documents = [
     // Document record
@@ -197,13 +198,13 @@ function generateRoomSnapshot(canvasData) {
     
     const widgetDocument = {
       state: {
-        id: props.id || `shape:${shapeId}`,
+        id: props.shapeId || props.id || `shape:${shapeId}`,
         typeName: 'shape',
         type: 'miyagi-widget',
         parentId: props.parentId || pageId,
         index: props.index || `a${widgetIndex}`,
-        x: props.x || (widgetIndex * 50),
-        y: props.y || (widgetIndex * 50),
+        x: props.position?.x || props.x || (widgetIndex * 50),
+        y: props.position?.y || props.y || (widgetIndex * 50),
         rotation: props.rotation || 0,
         isLocked: props.isLocked || false,
         opacity: props.opacity || 1,
@@ -211,8 +212,8 @@ function generateRoomSnapshot(canvasData) {
           initializationState: 'ready'
         },
         props: {
-          w: props.w || 300,
-          h: props.h || 200,
+          w: props.size?.w || props.w || 300,
+          h: props.size?.h || props.h || 200,
           widgetId: props.widgetId || `${props.templateHandle || 'widget'}_${Date.now()}`,
           templateHandle: props.templateHandle || 'notepad-react-test',
           htmlContent: widget.htmlTemplate,
@@ -221,7 +222,7 @@ function generateRoomSnapshot(canvasData) {
           zoomScale: props.zoomScale || 1
         }
       },
-      lastChangedClock: widgetIndex + 2
+      lastChangedClock: props.lastChangedClock || (widgetIndex + 2)
     };
 
     documents.push(widgetDocument);

@@ -25,18 +25,68 @@ widgets.forEach(widget => {
       presets: [[babelPresetPath, { runtime: 'classic' }]] // Use absolute path
     });
     
+    // Remove import statements and convert export default to const WidgetComponent
+    let compiledJS = result.code
+      .replace(/import\s+.*?from\s+['"].*?['"];?\s*/g, '') // Remove imports
+      .replace(/export\s+default\s+(\w+);?\s*$/, 'const WidgetComponent = $1;'); // Convert export to const
+    
+    // Add dynamic React hooks extraction and custom hooks at the top
+    compiledJS = `
+    // Extract all React hooks dynamically (present and future)
+    const reactHooks = {};
+    Object.keys(React).forEach(key => {
+      if (key.startsWith('use') && typeof React[key] === 'function') {
+        reactHooks[key] = React[key];
+      }
+    });
+    
+    // Destructure all available hooks for easy use
+    const {
+      useState, useEffect, useRef, useMemo, useCallback, useContext, 
+      useReducer, useLayoutEffect, useImperativeHandle, useDebugValue,
+      useDeferredValue, useId, useInsertionEffect, useSyncExternalStore,
+      useTransition, ...otherHooks
+    } = { ...reactHooks, ...React };
+    
+    // Custom hooks for Miyagi widgets
+    // useStorage hook will be injected by MiyagiStorageService
+    // useGlobalStorage hook will be injected by MiyagiStorageService
+    
+    ${compiledJS}
+    `;
+
     const html = `<!DOCTYPE html>
 <html>
 <head>
+  <title>React Widget</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    #react-root { 
+      width: 100%; 
+      height: 100vh; 
+      display: flex;
+      flex-direction: column;
+    }
+  </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="react-root"></div>
+  
   <script>
-    const { useState, useEffect } = React;
-    ${result.code.replace(/export default/, 'const Widget =')}
-    ReactDOM.render(React.createElement(Widget), document.getElementById('root'));
+    // Compiled JSX code
+    ${compiledJS}
+    
+    // Auto-render when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      const root = ReactDOM.createRoot(document.getElementById('react-root'));
+      root.render(React.createElement(WidgetComponent));
+    });
   </script>
 </body>
 </html>`;
