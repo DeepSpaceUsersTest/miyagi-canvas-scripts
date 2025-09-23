@@ -182,17 +182,15 @@ function generateRoomSnapshot(widgets) {
   };
 }
 
-// Auto-execute if this script is run directly
-if (require.main === module) {
-  try {
-    const result = generateCanvasState();
-    if (result) {
-      console.log('✅ Canvas state generated successfully');
-    } else {
-      console.log('⚠️ No canvas state generated');
-    }
-  } catch (error) {
-    console.error('❌ Error generating canvas state:', error);
-    process.exit(1);
+// Auto-execute
+try {
+  const result = generateCanvasState();
+  if (result) {
+    console.log('✅ Canvas state generated successfully');
+  } else {
+    console.log('⚠️ No canvas state generated');
   }
+} catch (error) {
+  console.error('❌ Error generating canvas state:', error);
+  process.exit(1);
 }
