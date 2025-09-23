@@ -72,6 +72,7 @@ function generateCanvasState() {
   fs.writeFileSync(outputPath, JSON.stringify(roomSnapshot, null, 2));
   
   console.log(`✅ Generated canvas-state.json with ${Object.keys(widgets).length} widgets`);
+  return true;
 }
 
 function generateRoomSnapshot(widgets) {
