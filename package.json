@@ -3,19 +3,17 @@
   "version": "1.0.0",
   "description": "Scripts for managing Miyagi canvas repositories - handles canvas state unpacking, JSX compilation, and repository setup",
   "type": "commonjs",
-  "main": "setup-repo.js",
+  "main": "index.js",
   "scripts": {
     "unpack": "node unpack-canvas-state.js",
     "compile": "node compile.js", 
     "generate": "node generate-canvas.js",
-    "test-hooks": "node test-hooks.js test",
-    "setup": "node setup-repo.js"
+    "test-hooks": "node test-hooks.js test"
   },
   "bin": {
     "miyagi-unpack": "./unpack-canvas-state.js",
     "miyagi-compile": "./compile.js",
-    "miyagi-generate": "./generate-canvas.js",
-    "miyagi-setup": "./setup-repo.js"
+    "miyagi-generate": "./generate-canvas.js"
   },
   "keywords": [
     "miyagi",
