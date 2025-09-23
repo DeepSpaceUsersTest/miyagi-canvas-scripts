@@ -19,12 +19,18 @@ function generateCanvasState() {
     .filter(entry => entry.isDirectory() && entry.name.startsWith('shape-'))
     .map(entry => entry.name);
   
-  console.log(`📁 Found ${shapeDirectories.length} widget directories`);
+  console.log(`📁 Found ${shapeDirectories.length} widget directories: ${shapeDirectories.join(', ')}`);
+  
+  if (shapeDirectories.length === 0) {
+    console.log('⚠️ No widget directories found - exiting');
+    return null;
+  }
   
   const widgets = {};
   
   // Load each widget
   for (const shapeId of shapeDirectories) {
+    console.log(`🔄 Processing widget: ${shapeId}`);
     const widgetDir = path.join(currentDir, shapeId);
     const widget = { properties: null, jsxTemplate: null, htmlTemplate: null };
     
@@ -180,5 +186,15 @@ function generateRoomSnapshot(widgets) {
 
 // Auto-execute if this script is run directly
 if (require.main === module) {
-  generateCanvasState();
+  try {
+    const result = generateCanvasState();
+    if (result) {
+      console.log('✅ Canvas state generated successfully');
+    } else {
+      console.log('⚠️ No canvas state generated');
+    }
+  } catch (error) {
+    console.error('❌ Error generating canvas state:', error);
+    process.exit(1);
+  }
 }
