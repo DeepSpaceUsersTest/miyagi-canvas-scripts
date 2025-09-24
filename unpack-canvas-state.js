@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Unpack Canvas State Script - Document-Driven Architecture
+ * Unpack Canvas State Script - Room-Centric Architecture
  * 
- * Processes all canvas-state.json files in the repository and generates:
+ * Processes all canvas-state.json files in the repository recursively.
+ * Each room (root or subcanvas) is processed identically and generates:
  * - Widget directories (shape-{shapeId}/) with properties.json, template.jsx, template.html, storage.json
- * - Canvas-link directories for subcanvases
- * - Canvas metadata files (canvas-metadata.json)
+ * - Canvas metadata files (canvas-metadata.json) 
  * - Global storage files (global-storage.json)
+ * - Canvas-link info files (canvas-link-info.json) in target room directories
  * 
  * Usage: node unpack-canvas-state.js
  */
@@ -20,8 +21,6 @@ class CanvasStateUnpacker {
     this.rootDir = rootDir;
     this.processedWidgets = new Set();
     this.referencedRooms = new Set(); // Rooms referenced by canvas-links across all canvas-state.json files
-    this.widgetStorage = {};
-    this.globalStorage = {};
   }
 
   /**
@@ -31,13 +30,13 @@ class CanvasStateUnpacker {
     console.log('🚀 Starting canvas state unpacking...');
     
     try {
-      // Find all canvas-state.json files
+      // Find all canvas-state.json files (root + all room-*/ subdirectories)
       const canvasStateFiles = this.findCanvasStateFiles(this.rootDir);
       console.log(`📁 Found ${canvasStateFiles.length} canvas state files`);
 
-      // Process each canvas-state.json file
+      // Process each room identically (no special root treatment)
       for (const filePath of canvasStateFiles) {
-        await this.processCanvasState(filePath);
+        await this.unpackRoom(filePath);
       }
 
       // Clean up old widget and room directories based on canvas-state.json content
@@ -72,19 +71,19 @@ class CanvasStateUnpacker {
   }
 
   /**
-   * Process a single canvas-state.json file
+   * Process a single room's canvas-state.json file
+   * Every room (root or subcanvas) is processed identically
    */
-  async processCanvasState(filePath) {
-    console.log(`📄 Processing: ${path.relative(this.rootDir, filePath)}`);
+  async unpackRoom(canvasStateFilePath) {
+    const roomDir = path.dirname(canvasStateFilePath);
+    const roomName = roomDir === this.rootDir ? 'root' : path.basename(roomDir);
+    
+    console.log(`📄 Unpacking room: ${roomName} (${path.relative(this.rootDir, canvasStateFilePath)})`);
 
     try {
-      // Read and parse canvas state
-      const canvasStateContent = fs.readFileSync(filePath, 'utf8');
+      // Read and parse this room's canvas state
+      const canvasStateContent = fs.readFileSync(canvasStateFilePath, 'utf8');
       const canvasState = JSON.parse(canvasStateContent);
-
-      // Determine canvas directory (root or subdirectory)
-      const canvasDir = path.dirname(filePath);
-      const isRootCanvas = canvasDir === this.rootDir;
 
       // Step 1: Process all documents and collect by type
       const processedDocs = {
@@ -95,28 +94,37 @@ class CanvasStateUnpacker {
         canvasLinks: []
       };
 
+      // First pass: Extract canvas_storage to get widget storage data
+      let roomWidgetStorage = {};
       for (const doc of canvasState.documents || []) {
-        const result = await this.processDocument(doc, canvasState);
+        if (doc.state?.typeName === 'canvas_storage') {
+          roomWidgetStorage = doc.state?.widgets || {};
+          break;
+        }
+      }
+
+      // Second pass: Process all documents with widget storage context
+      for (const doc of canvasState.documents || []) {
+        const result = await this.processDocument(doc, canvasState, roomWidgetStorage);
         if (result) {
           this.categorizeProcessedDocument(result, processedDocs);
         }
       }
 
-      // Step 2: Generate files based on processed documents
-      if (isRootCanvas) {
-        await this.generateCanvasMetadata(processedDocs.document, processedDocs.pages, canvasState, canvasDir);
-        await this.generateGlobalStorage(processedDocs.canvasStorage, canvasDir);
-      }
+      // Step 2: Generate metadata and storage files for THIS room
+      // (Every room gets these files - no special root treatment)
+      await this.generateCanvasMetadata(processedDocs.document, processedDocs.pages, canvasState, roomDir);
+      await this.generateGlobalStorage(processedDocs.canvasStorage, roomDir);
 
-      // Step 3: Generate widget directories (canvas-links are handled differently)
-      console.log(`  🧩 Found ${processedDocs.widgets.length} widgets`);
+      // Step 3: Generate widget directories in THIS room
+      console.log(`  🧩 Found ${processedDocs.widgets.length} widgets in ${roomName}`);
       for (const widget of processedDocs.widgets) {
-        await this.generateWidgetDirectory(widget, canvasDir);
+        await this.generateWidgetDirectory(widget, roomDir);
       }
 
       // Step 4: Store canvas-link info in target room directories
       if (processedDocs.canvasLinks.length > 0) {
-        console.log(`  🔗 Found ${processedDocs.canvasLinks.length} canvas-links`);
+        console.log(`  🔗 Found ${processedDocs.canvasLinks.length} canvas-links in ${roomName}`);
         for (const canvasLink of processedDocs.canvasLinks) {
           // Track this room as referenced
           const targetCanvasId = canvasLink.properties.targetCanvasId;
@@ -124,18 +132,14 @@ class CanvasStateUnpacker {
             this.referencedRooms.add(targetCanvasId);
           }
           
-          await this.storeCanvasLinkInfo(canvasLink, canvasDir);
+          await this.storeCanvasLinkInfo(canvasLink, roomDir);
         }
       }
 
-      if (isRootCanvas) {
-        console.log('✅ Processed root canvas');
-      } else {
-        console.log(`✅ Processed subcanvas: ${path.basename(canvasDir)}`);
-      }
+      console.log(`✅ Processed room: ${roomName}`);
 
     } catch (error) {
-      console.error(`❌ Error processing ${filePath}:`, error);
+      console.error(`❌ Error unpacking room ${roomName} from ${canvasStateFilePath}:`, error);
       throw error;
     }
   }
@@ -143,7 +147,7 @@ class CanvasStateUnpacker {
   /**
    * Main document processor - dispatches based on typeName
    */
-  async processDocument(document, canvasState) {
+  async processDocument(document, canvasState, roomWidgetStorage = {}) {
     const { state, lastChangedClock } = document;
     
     switch (state.typeName) {
@@ -154,7 +158,7 @@ class CanvasStateUnpacker {
       case 'canvas_storage':
         return this.processCanvasStorageRecord(state, lastChangedClock);
       case 'shape':
-        return this.processShapeRecord(state, lastChangedClock);
+        return this.processShapeRecord(state, lastChangedClock, roomWidgetStorage);
       default:
         // Ignore other document types (instance, camera, etc.)
         return null;
@@ -199,15 +203,11 @@ class CanvasStateUnpacker {
    * Process canvas_storage record
    */
   processCanvasStorageRecord(state, lastChangedClock) {
-    // Store for later use in widget generation
-    this.widgetStorage = state.widgets || {};
-    this.globalStorage = state.global || {};
-    
     return {
       type: 'canvas_storage',
       id: state.id,
-      widgetStorage: this.widgetStorage,
-      globalStorage: this.globalStorage,
+      widgetStorage: state.widgets || {},
+      globalStorage: state.global || {},
       lastChangedClock
     };
   }
@@ -215,10 +215,10 @@ class CanvasStateUnpacker {
   /**
    * Process shape record - dispatches based on shape type
    */
-  processShapeRecord(state, lastChangedClock) {
+  processShapeRecord(state, lastChangedClock, roomWidgetStorage = {}) {
     switch (state.type) {
       case 'miyagi-widget':
-        return this.processMiyagiWidget(state, lastChangedClock);
+        return this.processMiyagiWidget(state, lastChangedClock, roomWidgetStorage);
       case 'canvas-link':
         return this.processCanvasLink(state, lastChangedClock);
       default:
@@ -230,9 +230,9 @@ class CanvasStateUnpacker {
   /**
    * Process miyagi-widget shape
    */
-  processMiyagiWidget(state, lastChangedClock) {
+  processMiyagiWidget(state, lastChangedClock, roomWidgetStorage = {}) {
     const shapeId = state.id;
-    const widgetStorageData = this.widgetStorage[shapeId] || {};
+    const widgetStorageData = roomWidgetStorage[shapeId] || {};
     
     return {
       type: 'miyagi-widget',
@@ -357,7 +357,7 @@ class CanvasStateUnpacker {
   }
 
   /**
-   * Generate global-storage.json
+   * Generate global-storage.json for this room
    */
   async generateGlobalStorage(canvasStorageRecord, canvasDir) {
     const globalStorage = canvasStorageRecord?.globalStorage || {};
