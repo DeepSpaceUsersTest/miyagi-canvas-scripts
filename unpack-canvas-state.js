@@ -148,7 +148,7 @@ class CanvasStateUnpacker {
 
     // Write metadata file
     const metadataPath = path.join(canvasDir, 'canvas-metadata.json');
-    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
     console.log(`  📋 Generated: ${path.relative(this.rootDir, metadataPath)}`);
   }
 
@@ -174,7 +174,7 @@ class CanvasStateUnpacker {
 
     // Write global storage file
     const globalStoragePath = path.join(canvasDir, 'global-storage.json');
-    fs.writeFileSync(globalStoragePath, JSON.stringify(globalStorage, null, 2));
+    fs.writeFileSync(globalStoragePath, JSON.stringify(globalStorage, null, 2), 'utf8');
     console.log(`  🌐 Generated: ${path.relative(this.rootDir, globalStoragePath)}`);
   }
 
@@ -241,16 +241,19 @@ class CanvasStateUnpacker {
 
     fs.writeFileSync(
       path.join(widgetDir, 'properties.json'),
-      JSON.stringify(properties, null, 2)
+      JSON.stringify(properties, null, 2),
+      'utf8'
     );
 
     // Generate template.jsx
     const jsxContent = widgetShape.state.props?.jsxContent || '';
-    fs.writeFileSync(path.join(widgetDir, 'template.jsx'), jsxContent);
+
+    fs.writeFileSync(path.join(widgetDir, 'template.jsx'), jsxContent, 'utf8');
 
     // Generate template.html
     const htmlContent = widgetShape.state.props?.htmlContent || '';
-    fs.writeFileSync(path.join(widgetDir, 'template.html'), htmlContent);
+    
+    fs.writeFileSync(path.join(widgetDir, 'template.html'), htmlContent, 'utf8');
 
     // Generate storage.json (widget-specific storage)
     const widgetStorageData = widgetStorage[shapeId] || {};
@@ -262,7 +265,8 @@ class CanvasStateUnpacker {
 
     fs.writeFileSync(
       path.join(widgetDir, 'storage.json'),
-      JSON.stringify(storageData, null, 2)
+      JSON.stringify(storageData, null, 2),
+      'utf8'
     );
 
     console.log(`    🧩 Generated: ${path.relative(this.rootDir, widgetDir)}/`);
