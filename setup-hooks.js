@@ -15,15 +15,21 @@ const preCommitHook = `#!/bin/sh
 
 echo "🔨 Running Miyagi pre-commit hook..."
 
+# Ensure fresh scripts are downloaded
+if [ ! -d ".miyagi" ]; then
+  echo "📥 Setting up Miyagi scripts (first time)..."
+  node download-and-run.js compile.js >/dev/null 2>&1 || echo "⚠️ Script setup may be incomplete"
+fi
+
 # Run compile.js to convert JSX to HTML
-node download-and-run.js compile.js
+node .miyagi/compile.js
 if [ $? -ne 0 ]; then
   echo "❌ JSX compilation failed"
   exit 1
 fi
 
 # Run generate-canvas.js to create canvas-state.json
-node download-and-run.js generate-canvas.js  
+node .miyagi/generate-canvas.js  
 if [ $? -ne 0 ]; then
   echo "❌ Canvas state generation failed"
   exit 1
@@ -61,15 +67,28 @@ try {
     process.exit(1);
   }
 
-  // Download scripts if they don't exist
-  console.log('📥 Ensuring Miyagi scripts are available...');
+  // Force fresh download of all scripts
+  console.log('📥 Downloading fresh Miyagi scripts...');
   if (fs.existsSync('download-and-run.js')) {
-    console.log('🔄 Running download-and-run to ensure scripts are ready...');
     const { execSync } = require('child_process');
     
-    // Use download-and-run to ensure all scripts are available
+    // Remove existing .miyagi directory to force fresh downloads
+    if (fs.existsSync('.miyagi')) {
+      console.log('🗑️ Removing cached scripts to ensure fresh downloads...');
+      fs.rmSync('.miyagi', { recursive: true, force: true });
+    }
+    
+    // Use download-and-run to download all required scripts
+    console.log('🔄 Downloading compile.js...');
     execSync('node download-and-run.js compile.js', { stdio: 'inherit' });
-    console.log('✅ Scripts are ready');
+    
+    console.log('🔄 Downloading generate-canvas.js...');
+    execSync('node download-and-run.js generate-canvas.js', { stdio: 'inherit' });
+    
+    console.log('🔄 Downloading unpack-canvas-state.js...');
+    execSync('node download-and-run.js unpack-canvas-state.js', { stdio: 'inherit' });
+    
+    console.log('✅ Fresh scripts downloaded successfully');
   } else {
     console.log('⚠️  download-and-run.js not found. Scripts will be downloaded on first hook run.');
   }
