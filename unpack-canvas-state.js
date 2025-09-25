@@ -415,18 +415,18 @@ class CanvasStateUnpacker {
       return;
     }
 
-    // Find the target room directory
-    const targetRoomDir = path.join(this.rootDir, targetCanvasId);
+    // Target room should be a subdirectory of the current room
+    const targetRoomDir = path.join(parentCanvasDir, targetCanvasId);
     
-    // Check if target room directory exists
     if (!fs.existsSync(targetRoomDir)) {
-      console.warn(`⚠️ Target room directory not found: ${targetCanvasId}`);
+      console.warn(`⚠️ Target room directory not found: ${targetCanvasId} at ${targetRoomDir}`);
       return;
     }
 
     // Create canvas-link-info.json in the target room directory
+    const parentRoomName = parentCanvasDir === this.rootDir ? 'root' : path.basename(parentCanvasDir);
     const canvasLinkInfo = {
-      parentCanvasId: path.basename(parentCanvasDir) === '.' ? 'root' : path.basename(parentCanvasDir),
+      parentCanvasId: parentRoomName === 'root' ? path.basename(this.rootDir) : parentRoomName,
       linkShapeId: canvasLink.shapeId,
       position: canvasLink.properties.position,
       size: canvasLink.properties.size,

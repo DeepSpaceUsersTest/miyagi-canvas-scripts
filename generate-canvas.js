@@ -43,18 +43,30 @@ class CanvasStateGenerator {
   }
 
   /**
-   * Find all room directories (root + room-*)
+   * Find all room directories recursively (same pattern as unpack-canvas-state.js)
+   * Returns all directories that should contain canvas-state.json
    */
   findRoomDirectories(rootDir) {
-    const roomDirs = [rootDir]; // Always include root directory
+    const roomDirs = [];
     
-    const entries = fs.readdirSync(rootDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name.startsWith('room-')) {
-        roomDirs.push(path.join(rootDir, entry.name));
+    const searchRecursively = (currentDir) => {
+      const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      
+      // Check if this directory should have a canvas-state.json
+      const hasCanvasMetadata = entries.some(entry => entry.isFile() && entry.name === 'canvas-metadata.json');
+      if (hasCanvasMetadata) {
+        roomDirs.push(currentDir);
       }
-    }
+      
+      // Recursively search room-* subdirectories
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('room-')) {
+          searchRecursively(path.join(currentDir, entry.name));
+        }
+      }
+    };
     
+    searchRecursively(rootDir);
     return roomDirs;
   }
 
@@ -78,8 +90,8 @@ class CanvasStateGenerator {
       // Step 2: Load widgets from shape-* directories
       const { widgets, widgetStorage } = await this.loadRoomWidgets(roomDir);
 
-      // Step 3: Load canvas-links from canvas-link-info.json files in other rooms
-      const canvasLinks = await this.loadCanvasLinksPointingToRoom(roomName);
+      // Step 3: Load canvas-links from direct child room directories
+      const canvasLinks = await this.loadCanvasLinksForParentRoom(roomDir);
 
       // Step 4: Generate tldraw RoomSnapshot
       const roomSnapshot = this.generateRoomSnapshot({
@@ -217,50 +229,62 @@ class CanvasStateGenerator {
   }
 
   /**
-   * Load canvas-links that point to this room from canvas-link-info.json files
+   * Load canvas-links that should be included in this room's canvas-state
+   * Only looks at direct child directories of the current room
    */
-  async loadCanvasLinksPointingToRoom(targetRoomName) {
-    // For now, we'll look for canvas-link-info.json in this room directory
-    // In a more complete implementation, we'd scan all rooms for links pointing here
-    const roomDir = targetRoomName === 'root' ? this.rootDir : path.join(this.rootDir, targetRoomName);
-    const canvasLinkInfoPath = path.join(roomDir, 'canvas-link-info.json');
+  async loadCanvasLinksForParentRoom(currentRoomDir) {
+    const canvasLinks = [];
+    const currentRoomName = currentRoomDir === this.rootDir ? path.basename(this.rootDir) : path.basename(currentRoomDir);
     
-    if (!fs.existsSync(canvasLinkInfoPath)) {
-      return [];
-    }
+    // Get direct child room-* directories of the current room
+    const entries = fs.readdirSync(currentRoomDir, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.startsWith('room-')) {
+        const childRoomDir = path.join(currentRoomDir, entry.name);
+        const canvasLinkInfoPath = path.join(childRoomDir, 'canvas-link-info.json');
+        
+        if (!fs.existsSync(canvasLinkInfoPath)) {
+          continue;
+        }
 
-    try {
-      const canvasLinkInfo = JSON.parse(fs.readFileSync(canvasLinkInfoPath, 'utf8'));
-      
-      // Convert canvas-link-info.json back to canvas-link shape
-      return [{
-        shapeId: canvasLinkInfo.linkShapeId || `shape:link-to-${targetRoomName}`,
-        properties: {
-          id: canvasLinkInfo.linkShapeId || `shape:link-to-${targetRoomName}`,
-          type: 'canvas-link',
-          parentId: canvasLinkInfo.parentId || 'page:page',
-          index: canvasLinkInfo.index || 'a1',
-          x: canvasLinkInfo.position?.x || 0,
-          y: canvasLinkInfo.position?.y || 0,
-          rotation: canvasLinkInfo.rotation || 0,
-          isLocked: canvasLinkInfo.isLocked || false,
-          opacity: canvasLinkInfo.opacity || 1,
-          meta: canvasLinkInfo.meta || {},
-          props: {
-            w: canvasLinkInfo.size?.w || 200,
-            h: canvasLinkInfo.size?.h || 100,
-            targetCanvasId: targetRoomName,
-            label: canvasLinkInfo.label || `Link to ${targetRoomName}`,
-            linkType: canvasLinkInfo.linkType || 'realfile'
+        try {
+          const canvasLinkInfo = JSON.parse(fs.readFileSync(canvasLinkInfoPath, 'utf8'));
+          
+          // Check if this canvas-link should appear in the current room
+          if (canvasLinkInfo.parentCanvasId === currentRoomName) {
+            canvasLinks.push({
+              shapeId: canvasLinkInfo.linkShapeId || `shape:link-to-${entry.name}`,
+              properties: {
+                id: canvasLinkInfo.linkShapeId || `shape:link-to-${entry.name}`,
+                typeName: 'shape',
+                type: 'canvas-link',
+                parentId: canvasLinkInfo.parentId || 'page:page',
+                index: canvasLinkInfo.index || 'a1',
+                x: canvasLinkInfo.position?.x || 0,
+                y: canvasLinkInfo.position?.y || 0,
+                rotation: canvasLinkInfo.rotation || 0,
+                isLocked: canvasLinkInfo.isLocked || false,
+                opacity: canvasLinkInfo.opacity || 1,
+                meta: canvasLinkInfo.meta || {},
+                props: {
+                  w: canvasLinkInfo.size?.w || 200,
+                  h: canvasLinkInfo.size?.h || 100,
+                  targetCanvasId: entry.name, // The child room ID
+                  label: canvasLinkInfo.label || `Link to ${entry.name}`,
+                  linkType: canvasLinkInfo.linkType || 'realfile'
+                }
+              },
+              lastChangedClock: canvasLinkInfo.lastChangedClock || 0
+            });
           }
-        },
-        lastChangedClock: canvasLinkInfo.lastChangedClock || 0
-      }];
-      
-    } catch (error) {
-      console.error(`❌ Error loading canvas-link-info.json from ${roomDir}:`, error);
-      return [];
+        } catch (error) {
+          console.error(`❌ Error loading canvas-link-info from ${canvasLinkInfoPath}:`, error);
+        }
+      }
     }
+    
+    return canvasLinks;
   }
 
   /**
