@@ -5,19 +5,48 @@ const babel = require('@babel/core');
 // Get the absolute path to the babel preset (relative to this script)
 const babelPresetPath = path.join(__dirname, 'node_modules', '@babel', 'preset-react');
 
-// Find widgets
-const entries = fs.readdirSync('.', { withFileTypes: true });
-const widgets = entries.filter(e => e.isDirectory() && e.name.startsWith('shape-'));
+// Recursively find all shape-* directories
+function findShapeDirectories(dir = '.', found = []) {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const fullPath = path.join(dir, entry.name);
+        
+        // Skip node_modules, .git, and other common ignore patterns
+        if (entry.name === 'node_modules' || entry.name === '.git' || 
+            entry.name === 'dist' || entry.name === 'build' || 
+            entry.name === '.next' || entry.name.startsWith('.')) {
+          continue;
+        }
+        
+        // If this is a shape- directory, add it
+        if (entry.name.startsWith('shape-')) {
+          found.push({ name: entry.name, path: fullPath });
+        } else {
+          // Recursively search subdirectories
+          findShapeDirectories(fullPath, found);
+        }
+      }
+    }
+  } catch (error) {
+    // Silently skip directories we can't read (permissions, etc.)
+  }
+  
+  return found;
+}
 
-console.log(`Found ${widgets.length} widgets`);
+const widgets = findShapeDirectories();
+console.log(`Found ${widgets.length} widgets across all directories`);
 
 // Compile each widget
 widgets.forEach(widget => {
-  const jsxFile = path.join(widget.name, 'template.jsx');
-  const htmlFile = path.join(widget.name, 'template.html');
+  const jsxFile = path.join(widget.path, 'template.jsx');
+  const htmlFile = path.join(widget.path, 'template.html');
   
   if (fs.existsSync(jsxFile)) {
-    console.log(`Compiling ${widget.name}...`);
+    console.log(`Compiling ${widget.name} at ${widget.path}...`);
     
     const jsx = fs.readFileSync(jsxFile, 'utf8');
     
