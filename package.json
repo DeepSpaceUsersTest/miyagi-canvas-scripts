@@ -1,44 +1,10 @@
 {
-  "name": "miyagi-canvas-scripts",
+  "name": "miyagi-repository-scripts",
   "version": "1.0.0",
-  "description": "Scripts for managing Miyagi canvas repositories - handles canvas state unpacking, JSX compilation, and repository setup",
-  "type": "commonjs",
-  "main": "index.js",
-  "scripts": {
-    "unpack": "node unpack-canvas-state.js",
-    "compile": "node compile.js", 
-    "generate": "node generate-canvas.js",
-    "test-hooks": "node test-hooks.js test"
-  },
-  "bin": {
-    "miyagi-unpack": "./unpack-canvas-state.js",
-    "miyagi-compile": "./compile.js",
-    "miyagi-generate": "./generate-canvas.js"
-  },
-  "keywords": [
-    "miyagi",
-    "canvas",
-    "tldraw",
-    "jsx",
-    "git-hooks",
-    "repository-management"
-  ],
+  "description": "Miyagi canvas repository automation scripts",
+  "private": true,
   "dependencies": {
     "@babel/core": "^7.28.4",
     "@babel/preset-react": "^7.27.1"
-  },
-  "engines": {
-    "node": ">=16.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/DeepSpaceUsersTest/miyagi-canvas-scripts.git"
-  },
-  "license": "MIT",
-  "files": [
-    "*.js",
-    "*.cjs",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

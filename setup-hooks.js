@@ -79,49 +79,21 @@ async function setupHooks() {
       fs.rmSync('.miyagi', { recursive: true, force: true });
     }
     
-    // Download all required scripts in parallel
-    console.log('🔄 Downloading all scripts in parallel...');
-    const { spawn } = require('child_process');
+    // Use download-and-run.js once to set up everything (it already handles parallel downloads internally)
+    console.log('🔄 Setting up dependencies and downloading scripts...');
     
-    const scripts = ['compile.js', 'generate-canvas.js', 'unpack-canvas-state.js'];
-    
-    // Create parallel download promises
-    const downloadPromises = scripts.map(script => {
-      return new Promise((resolve, reject) => {
-        console.log(`📥 Starting download: ${script}`);
-        const child = spawn('node', ['download-and-run.js', script], { 
-          stdio: ['inherit', 'pipe', 'pipe'] 
-        });
-        
-        let stdout = '';
-        let stderr = '';
-        
-        child.stdout.on('data', (data) => {
-          stdout += data.toString();
-        });
-        
-        child.stderr.on('data', (data) => {
-          stderr += data.toString();
-        });
-        
-        child.on('close', (code) => {
-          if (code === 0) {
-            console.log(`✅ Downloaded: ${script}`);
-            resolve({ script, stdout });
-          } else {
-            console.error(`❌ Failed to download ${script}: ${stderr}`);
-            reject(new Error(`Download failed for ${script}: ${stderr}`));
-          }
-        });
-      });
-    });
-    
-    // Wait for all downloads to complete
+    // Run download-and-run.js once - it will:
+    // 1. Install npm dependencies once
+    // 2. Download all required scripts
+    // 3. Handle everything efficiently
     try {
-      await Promise.all(downloadPromises);
-      console.log('🎉 All scripts downloaded successfully in parallel!');
+      execSync('node download-and-run.js compile.js', { 
+        stdio: 'inherit',
+        timeout: 120000 // 2 minute timeout for full setup
+      });
+      console.log('✅ Dependencies and scripts setup completed!');
     } catch (error) {
-      console.error('❌ Some downloads failed:', error.message);
+      console.error('❌ Setup failed:', error.message);
       throw error;
     }
   } else {

@@ -47,13 +47,61 @@ async function ensureSetup() {
         JSON.stringify(packageJson, null, 2)
       );
       
-      console.log('📦 Installing dependencies...');
-      // Install dependencies
-      execSync('npm install', { 
-        cwd: SCRIPTS_DIR, 
-        stdio: 'inherit',
-        timeout: 60000 // 60 second timeout
-      });
+      console.log('📦 Setting up dependencies...');
+      
+      // Try to download pre-built node_modules bundle first (much faster)
+      const bundleUrl = `${SCRIPTS_URL}/node_modules.tar.gz`;
+      let bundleDownloaded = false;
+      
+      try {
+        console.log('⚡ Attempting fast setup with pre-built dependencies...');
+        
+        if (typeof fetch !== 'undefined') {
+          const response = await fetch(bundleUrl);
+          if (response.ok) {
+            const buffer = await response.arrayBuffer();
+            const fs = require('fs');
+            const path = require('path');
+            const { execSync } = require('child_process');
+            
+            // Write bundle to temp file
+            const bundlePath = path.join(SCRIPTS_DIR, 'node_modules.tar.gz');
+            fs.writeFileSync(bundlePath, Buffer.from(buffer));
+            
+            // Extract bundle
+            execSync('tar -xzf node_modules.tar.gz', { 
+              cwd: SCRIPTS_DIR, 
+              stdio: 'inherit' 
+            });
+            
+            // Clean up
+            fs.unlinkSync(bundlePath);
+            
+            console.log('✅ Fast setup completed with pre-built dependencies!');
+            bundleDownloaded = true;
+          }
+        } else {
+          // Fallback using curl for older Node versions
+          execSync(`curl -L "${bundleUrl}" | tar -xz`, { 
+            cwd: SCRIPTS_DIR, 
+            stdio: 'inherit' 
+          });
+          console.log('✅ Fast setup completed with pre-built dependencies!');
+          bundleDownloaded = true;
+        }
+      } catch (error) {
+        console.log('⚠️ Pre-built bundle not available, falling back to npm install...');
+      }
+      
+      // Fallback to npm install if bundle download failed
+      if (!bundleDownloaded) {
+        console.log('📦 Installing dependencies via npm...');
+        execSync('npm install --no-optional --prefer-offline', { 
+          cwd: SCRIPTS_DIR, 
+          stdio: 'inherit',
+          timeout: 60000 // 60 second timeout
+        });
+      }
       
       // Download all required scripts
       const scripts = [
@@ -63,10 +111,10 @@ async function ensureSetup() {
         'setup-hooks.js'
       ];
       
-      console.log('📥 Downloading scripts...');
-      for (const script of scripts) {
-        await downloadScript(script);
-      }
+      console.log('📥 Downloading scripts in parallel...');
+      // Download all scripts simultaneously for speed
+      const downloadPromises = scripts.map(script => downloadScript(script));
+      await Promise.all(downloadPromises);
       
       console.log('✅ Miyagi setup complete!');
       
