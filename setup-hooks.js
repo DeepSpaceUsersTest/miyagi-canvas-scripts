@@ -59,8 +59,9 @@ fi
 echo "✅ Post-merge hook completed successfully"
 exit 0`;
 
-try {
-  // Ensure .git/hooks directory exists
+async function setupHooks() {
+  try {
+    // Ensure .git/hooks directory exists
   const hooksDir = path.join('.git', 'hooks');
   if (!fs.existsSync(hooksDir)) {
     console.log('❌ .git/hooks directory not found. Make sure you are in a git repository.');
@@ -78,17 +79,51 @@ try {
       fs.rmSync('.miyagi', { recursive: true, force: true });
     }
     
-    // Use download-and-run to download all required scripts
-    console.log('🔄 Downloading compile.js...');
-    execSync('node download-and-run.js compile.js', { stdio: 'inherit' });
+    // Download all required scripts in parallel
+    console.log('🔄 Downloading all scripts in parallel...');
+    const { spawn } = require('child_process');
     
-    console.log('🔄 Downloading generate-canvas.js...');
-    execSync('node download-and-run.js generate-canvas.js', { stdio: 'inherit' });
+    const scripts = ['compile.js', 'generate-canvas.js', 'unpack-canvas-state.js'];
     
-    console.log('🔄 Downloading unpack-canvas-state.js...');
-    execSync('node download-and-run.js unpack-canvas-state.js', { stdio: 'inherit' });
+    // Create parallel download promises
+    const downloadPromises = scripts.map(script => {
+      return new Promise((resolve, reject) => {
+        console.log(`📥 Starting download: ${script}`);
+        const child = spawn('node', ['download-and-run.js', script], { 
+          stdio: ['inherit', 'pipe', 'pipe'] 
+        });
+        
+        let stdout = '';
+        let stderr = '';
+        
+        child.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+        
+        child.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+        
+        child.on('close', (code) => {
+          if (code === 0) {
+            console.log(`✅ Downloaded: ${script}`);
+            resolve({ script, stdout });
+          } else {
+            console.error(`❌ Failed to download ${script}: ${stderr}`);
+            reject(new Error(`Download failed for ${script}: ${stderr}`));
+          }
+        });
+      });
+    });
     
-    console.log('✅ Fresh scripts downloaded successfully');
+    // Wait for all downloads to complete
+    try {
+      await Promise.all(downloadPromises);
+      console.log('🎉 All scripts downloaded successfully in parallel!');
+    } catch (error) {
+      console.error('❌ Some downloads failed:', error.message);
+      throw error;
+    }
   } else {
     console.log('⚠️  download-and-run.js not found. Scripts will be downloaded on first hook run.');
   }
@@ -113,7 +148,14 @@ try {
   console.log('');
   console.log('Your repository is now ready for automated canvas synchronization!');
 
-} catch (error) {
-  console.error('❌ Failed to setup git hooks:', error.message);
-  process.exit(1);
+  } catch (error) {
+    console.error('❌ Failed to setup git hooks:', error.message);
+    process.exit(1);
+  }
 }
+
+// Run the setup
+setupHooks().catch(error => {
+  console.error('❌ Setup failed:', error.message);
+  process.exit(1);
+});
