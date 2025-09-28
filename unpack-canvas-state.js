@@ -5,7 +5,7 @@
  * 
  * Processes all canvas-state.json files in the repository recursively.
  * Each room (root or subcanvas) is processed identically and generates:
- * - Widget directories (shape-{shapeId}/) with properties.json, template.jsx, template.html, storage.json
+ * - Widget directories (widget-{shapeId}/) with properties.json, template.jsx, template.html, storage.json
  * - Canvas metadata files (canvas-metadata.json) 
  * - Global storage files (global-storage.json)
  * - Canvas-link info files (canvas-link-info.json) in target room directories
@@ -402,7 +402,7 @@ class CanvasStateUnpacker {
    */
   async generateWidgetDirectory(widget, canvasDir) {
     const shapeIdClean = widget.shapeId.replace('shape:', '');
-    const widgetDir = path.join(canvasDir, `shape-${shapeIdClean}`);
+    const widgetDir = path.join(canvasDir, `widget-${shapeIdClean}`);
 
     // Track this widget to prevent cleanup
     this.processedWidgets.add(path.relative(this.rootDir, widgetDir));
@@ -545,7 +545,7 @@ class CanvasStateUnpacker {
   }
 
   /**
-   * Find all shape-* directories recursively
+   * Find all widget-* directories recursively
    */
   findShapeDirectories(dir) {
     const shapeDirs = [];
@@ -555,7 +555,7 @@ class CanvasStateUnpacker {
       if (entry.isDirectory()) {
         const fullPath = path.join(dir, entry.name);
         
-        if (entry.name.startsWith('shape-')) {
+        if (entry.name.startsWith('widget-')) {
           shapeDirs.push(fullPath);
         } else if (!entry.name.startsWith('.')) {
           shapeDirs.push(...this.findShapeDirectories(fullPath));

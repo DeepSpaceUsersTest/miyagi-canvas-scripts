@@ -5,7 +5,7 @@ const babel = require('@babel/core');
 // Get the absolute path to the babel preset (relative to this script)
 const babelPresetPath = path.join(__dirname, 'node_modules', '@babel', 'preset-react');
 
-// Recursively find all shape-* directories
+// Recursively find all widget-* directories
 function findShapeDirectories(dir = '.', found = []) {
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -21,8 +21,8 @@ function findShapeDirectories(dir = '.', found = []) {
           continue;
         }
         
-        // If this is a shape- directory, add it
-        if (entry.name.startsWith('shape-')) {
+        // If this is a widget- directory, add it
+        if (entry.name.startsWith('widget-')) {
           found.push({ name: entry.name, path: fullPath });
         } else {
           // Recursively search subdirectories
