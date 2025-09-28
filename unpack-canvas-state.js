@@ -27,22 +27,16 @@ class CanvasStateUnpacker {
    * Main entry point
    */
   async run() {
-    console.log('🚀 Starting canvas state unpacking...');
+    console.log('🚀 Starting canvas state unpacking with graph traversal...');
     
     try {
-      // Step 1: Identify and reference the root room
-      await this.identifyAndReferenceRootRoom();
+      // Step 1: Identify root room (but don't reference it yet)
+      const rootRoomName = await this.identifyRootRoom();
 
-      // Step 2: Find all canvas-state.json files (root + all room-*/ subdirectories)
-      const canvasStateFiles = this.findCanvasStateFiles(this.rootDir);
-      console.log(`📁 Found ${canvasStateFiles.length} canvas state files`);
+      // Step 2: Graph traversal starting from root
+      await this.traverseCanvasGraph(rootRoomName);
 
-      // Process each room identically (no special root treatment)
-      for (const filePath of canvasStateFiles) {
-        await this.unpackRoom(filePath);
-      }
-
-      // Clean up old widget and room directories based on canvas-state.json content
+      // Step 3: Clean up old widget and room directories based on canvas-state.json content
       await this.cleanupOldWidgets();
       await this.cleanupUnreferencedRooms();
 
@@ -54,10 +48,11 @@ class CanvasStateUnpacker {
   }
 
   /**
-   * Identify the root room directory and add it to referenced rooms
+   * Identify the root room directory
    * Ensures there is exactly one root room in the repository
+   * Returns the root room name for graph traversal initialization
    */
-  async identifyAndReferenceRootRoom() {
+  async identifyRootRoom() {
     console.log('🔍 Identifying root room...');
 
     const entries = fs.readdirSync(this.rootDir, { withFileTypes: true });
@@ -76,8 +71,66 @@ class CanvasStateUnpacker {
     }
 
     const rootRoomName = rootRoomDirs[0];
-    this.referencedRooms.add(rootRoomName);
-    console.log(`✅ Root room identified and referenced: ${rootRoomName}`);
+    console.log(`✅ Root room identified: ${rootRoomName}`);
+    return rootRoomName;
+  }
+
+  /**
+   * Traverse the canvas graph using BFS starting from the root room
+   * Only processes rooms that are reachable via canvasLinks
+   */
+  async traverseCanvasGraph(rootRoomName) {
+    console.log(`🌐 Starting graph traversal from root: ${rootRoomName}`);
+    
+    // Initialize queue with root room path
+    const rootRoomPath = path.join(this.rootDir, rootRoomName);
+    const queue = [rootRoomPath];
+    
+    while (queue.length > 0) {
+      const currentRoomPath = queue.shift();
+      const currentRoomName = path.basename(currentRoomPath);
+      
+      console.log(`📍 Processing room: ${currentRoomName} at ${currentRoomPath}`);
+      
+      // Find and process this room's canvas-state.json
+      const canvasStateFile = this.findCanvasStateFileForRoom(currentRoomPath);
+      if (!canvasStateFile) {
+        console.warn(`⚠️ No canvas-state.json found for room: ${currentRoomName} at ${currentRoomPath}`);
+        continue;
+      }
+      
+      // Process the room
+      const processedDocs = await this.unpackRoom(canvasStateFile);
+      this.referencedRooms.add(currentRoomName);
+      
+      // Add children to queue
+      for (const canvasLink of processedDocs.canvasLinks) {
+        const targetRoomName = canvasLink.properties.targetCanvasId;
+        if (targetRoomName && !this.referencedRooms.has(targetRoomName)) {
+          console.log(`  🔗 Found link to: ${targetRoomName}`);
+          // Child room is nested inside current room
+          const childRoomPath = path.join(currentRoomPath, targetRoomName);
+          queue.push(childRoomPath);
+        }
+      }
+    }
+    
+    console.log(`✅ Graph traversal completed. Processed ${this.referencedRooms.size} rooms.`);
+  }
+
+  /**
+   * Find canvas-state.json file for a specific room path
+   * Takes the full path to the room directory, not just the room name
+   */
+  findCanvasStateFileForRoom(roomPath) {
+    // All rooms (including root) have their canvas-state.json in their own directory
+    const canvasStatePath = path.join(roomPath, 'canvas-state.json');
+    console.log(`  🔍 Looking for: ${canvasStatePath}`);
+    if (fs.existsSync(canvasStatePath)) {
+      return canvasStatePath;
+    }
+    
+    return null;
   }
 
   /**
@@ -156,17 +209,14 @@ class CanvasStateUnpacker {
       if (processedDocs.canvasLinks.length > 0) {
         console.log(`  🔗 Found ${processedDocs.canvasLinks.length} canvas-links in ${roomName}`);
         for (const canvasLink of processedDocs.canvasLinks) {
-          // Track this room as referenced
-          const targetCanvasId = canvasLink.properties.targetCanvasId;
-          if (targetCanvasId) {
-            this.referencedRooms.add(targetCanvasId);
-          }
-          
           await this.storeCanvasLinkInfo(canvasLink, roomDir);
         }
       }
 
       console.log(`✅ Processed room: ${roomName}`);
+      
+      // Return processedDocs for graph traversal
+      return processedDocs;
 
     } catch (error) {
       console.error(`❌ Error unpacking room ${roomName} from ${canvasStateFilePath}:`, error);
@@ -527,17 +577,26 @@ class CanvasStateUnpacker {
   }
 
   /**
-   * Find all room-* directories in the root directory only
+   * Find all room-* directories recursively throughout the repository
    */
   findRoomDirectories(dir) {
     const roomDirs = [];
     
-    // Only look in the root directory for room-* directories
+    // Recursively find all room-* directories throughout the repository
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isDirectory() && entry.name.startsWith('room-')) {
+      if (entry.isDirectory()) {
         const fullPath = path.join(dir, entry.name);
-        roomDirs.push(fullPath);
+        
+        // If this is a room directory, add it to the list
+        if (entry.name.startsWith('room-')) {
+          roomDirs.push(fullPath);
+        }
+        
+        // Recursively search subdirectories (skip hidden directories)
+        if (!entry.name.startsWith('.')) {
+          roomDirs.push(...this.findRoomDirectories(fullPath));
+        }
       }
     }
     
