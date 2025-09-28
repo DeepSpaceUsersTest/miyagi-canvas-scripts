@@ -87,7 +87,7 @@ class CanvasStateGenerator {
         return false;
       }
 
-      // Step 2: Load widgets from shape-* directories
+      // Step 2: Load widgets from widget-* directories
       const { widgets, widgetStorage } = await this.loadRoomWidgets(roomDir);
 
       // Step 3: Load canvas-links from direct child room directories
@@ -150,12 +150,12 @@ class CanvasStateGenerator {
   }
 
   /**
-   * Load all widgets from shape-* directories in a room
+   * Load all widgets from widget-* directories in a room
    */
   async loadRoomWidgets(roomDir) {
     const entries = fs.readdirSync(roomDir, { withFileTypes: true });
     const shapeDirectories = entries
-      .filter(entry => entry.isDirectory() && entry.name.startsWith('shape-'))
+      .filter(entry => entry.isDirectory() && entry.name.startsWith('widget-'))
       .map(entry => entry.name);
 
     console.log(`  🧩 Found ${shapeDirectories.length} widget directories in ${path.basename(roomDir)}`);
@@ -180,11 +180,11 @@ class CanvasStateGenerator {
   }
 
   /**
-   * Load a single widget from shape-* directory
+   * Load a single widget from widget-* directory
    */
   async loadWidget(roomDir, shapeDir) {
     const widgetDir = path.join(roomDir, shapeDir);
-    const shapeId = shapeDir.replace('shape-', 'shape:');
+    const shapeId = shapeDir.replace('widget-', 'shape:');
     
     try {
       // Load all widget files
