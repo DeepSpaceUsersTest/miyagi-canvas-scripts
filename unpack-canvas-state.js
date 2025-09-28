@@ -21,6 +21,7 @@ class CanvasStateUnpacker {
     this.rootDir = rootDir;
     this.processedWidgets = new Set();
     this.referencedRooms = new Set(); // Rooms referenced by canvas-links across all canvas-state.json files
+    this.unreferencedRoomDirs = new Set(); // Room directories that are potentially unreferenced (populated during BFS)
   }
 
   /**
@@ -99,6 +100,9 @@ class CanvasStateUnpacker {
         continue;
       }
       
+      // Collect all room directories in current directory as potentially unreferenced
+      this.collectRoomDirectoriesInPath(currentRoomPath);
+      
       // Process the room
       const processedDocs = await this.unpackRoom(canvasStateFile);
       this.referencedRooms.add(currentRoomName);
@@ -106,7 +110,10 @@ class CanvasStateUnpacker {
       // Add children to queue
       for (const canvasLink of processedDocs.canvasLinks) {
         const targetRoomName = canvasLink.properties.targetCanvasId;
-        if (targetRoomName && !this.referencedRooms.has(targetRoomName)) {
+        if(!targetRoomName) continue;
+        // Remove from unreferenced set since it's actually referenced
+        this.unreferencedRoomDirs.delete(path.join(currentRoomPath, targetRoomName));
+        if (!this.referencedRooms.has(targetRoomName)) {
           console.log(`  🔗 Found link to: ${targetRoomName}`);
           // Child room is nested inside current room
           const childRoomPath = path.join(currentRoomPath, targetRoomName);
@@ -116,6 +123,23 @@ class CanvasStateUnpacker {
     }
     
     console.log(`✅ Graph traversal completed. Processed ${this.referencedRooms.size} rooms.`);
+  }
+
+  /**
+   * Collect all room-* directories in the given path as potentially unreferenced
+   */
+  collectRoomDirectoriesInPath(roomPath) {
+    try {
+      const entries = fs.readdirSync(roomPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('room-')) {
+          const fullPath = path.join(roomPath, entry.name);
+          this.unreferencedRoomDirs.add(fullPath);
+        }
+      }
+    } catch (error) {
+      // Ignore errors (directory might not exist or be readable)
+    }
   }
 
   /**
@@ -550,58 +574,30 @@ class CanvasStateUnpacker {
 
   /**
    * Clean up room directories that are not referenced by any canvas-links in any canvas-state.json
+   * Uses the optimized approach: unreferencedRoomDirs set is populated during BFS traversal
    */
   async cleanupUnreferencedRooms() {
     console.log('🏠 Cleaning up unreferenced room directories...');
     
     let cleanedCount = 0;
-    const allRoomDirs = this.findRoomDirectories(this.rootDir);
     
-    console.log(`   Found ${allRoomDirs.length} room directories`);
+    console.log(`   Found ${this.unreferencedRoomDirs.size} unreferenced room directories`);
     console.log(`   Found ${this.referencedRooms.size} referenced rooms: ${Array.from(this.referencedRooms).join(', ')}`);
     
-    for (const roomDir of allRoomDirs) {
+    for (const roomDir of this.unreferencedRoomDirs) {
       const roomName = path.basename(roomDir);
-      
-      // Remove room if it's not referenced by any canvas-link across all canvas-state.json files
-      if (!this.referencedRooms.has(roomName)) {
-        console.log(`  🗑️  Removing unreferenced room: ${roomName}`);
+      console.log(`  🗑️  Removing unreferenced room: ${roomName} at ${roomDir}`);
+      try {
         fs.rmSync(roomDir, { recursive: true, force: true });
         cleanedCount++;
-      } else {
-        console.log(`  ✅ Keeping referenced room: ${roomName}`);
+      } catch (error) {
+        console.error(`❌ Failed to remove room directory ${roomDir}:`, error.message);
       }
     }
     
     console.log(`🏠 Cleaned up ${cleanedCount} unreferenced room directories`);
   }
 
-  /**
-   * Find all room-* directories recursively throughout the repository
-   */
-  findRoomDirectories(dir) {
-    const roomDirs = [];
-    
-    // Recursively find all room-* directories throughout the repository
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const fullPath = path.join(dir, entry.name);
-        
-        // If this is a room directory, add it to the list
-        if (entry.name.startsWith('room-')) {
-          roomDirs.push(fullPath);
-        }
-        
-        // Recursively search subdirectories (skip hidden directories)
-        if (!entry.name.startsWith('.')) {
-          roomDirs.push(...this.findRoomDirectories(fullPath));
-        }
-      }
-    }
-    
-    return roomDirs;
-  }
 
   /**
    * Find all widget-* directories recursively
