@@ -20,7 +20,7 @@ class CanvasStateUnpacker {
   constructor(rootDir = process.cwd()) {
     this.rootDir = rootDir;
     this.processedWidgets = new Set();
-    this.processedGeneralShapes = new Set();
+    this.processedGeneralObjects = new Set();
     this.referencedRooms = new Set(); // Rooms referenced by canvas-links across all canvas-state.json files
     this.unreferencedRoomDirs = new Set(); // Room directories that are potentially unreferenced (populated during BFS)
   }
@@ -37,7 +37,7 @@ class CanvasStateUnpacker {
       await this.traverseCanvasGraph(rootRoomName);
 
       await this.cleanupOldWidgets();
-      await this.cleanupOldGeneralShapes();
+      await this.cleanupOldGeneralObjects();
       await this.cleanupUnreferencedRooms();
 
       console.log('✅ Canvas state unpacking completed successfully!');
@@ -155,7 +155,7 @@ class CanvasStateUnpacker {
         canvasStorage: null,
         widgets: [],
         canvasLinks: [],
-        generalShapes: []
+        generalObjects: []
       };
 
       // First pass: Extract canvas_storage to get widget storage data
@@ -180,10 +180,10 @@ class CanvasStateUnpacker {
       await this.generateCanvasMetadata(processedDocs.document, processedDocs.pages, canvasState, roomDir);
       await this.generateGlobalStorage(processedDocs.canvasStorage, roomDir);
 
-      // Step 2.5: Generate general shape files
-      console.log(`  🔷 Found ${processedDocs.generalShapes.length} general shapes in ${roomName}`);
-      for (const generalShape of processedDocs.generalShapes) {
-        await this.generateGeneralShape(generalShape, roomDir);
+      // Step 2.5: Generate general object files
+      console.log(`  🔷 Found ${processedDocs.generalObjects.length} general objects in ${roomName}`);
+      for (const generalObject of processedDocs.generalObjects) {
+        await this.generateGeneralObject(generalObject, roomDir);
       }
 
       // Step 3: Generate widget directories in THIS room
@@ -226,6 +226,8 @@ class CanvasStateUnpacker {
         return this.processCanvasStorageRecord(state, lastChangedClock);
       case 'shape':
         return this.processShapeRecord(state, lastChangedClock, roomWidgetStorage);
+      case 'asset':
+        return state;
       default:
         // Ignore other document types (instance, camera, etc.)
         return null;
@@ -388,8 +390,9 @@ class CanvasStateUnpacker {
       default:
         // If it has a typeName of 'shape' but isn't miyagi-widget or canvas-link,
         // it's a general shape (raw state object)
-        if (result.typeName === 'shape') {
-          processedDocs.generalShapes.push(result);
+        // Also handle all assets
+        if (result.typeName === 'shape' || result.typeName === 'asset') {
+          processedDocs.generalObjects.push(result);
         }
         break;
     }
@@ -480,24 +483,36 @@ class CanvasStateUnpacker {
   }
 
   /**
-   * Generate a general shape file for unknown shape types
+   * Generate a general object file for unknown shape types and image assets
    */
-  async generateGeneralShape(shapeState, canvasDir) {
-    const shapeIdClean = shapeState.id.replace('shape:', '');
-    const shapeFileName = `general-shape-${shapeState.type}-${shapeIdClean}.json`;
-    const shapeFilePath = path.join(canvasDir, shapeFileName);
+  async generateGeneralObject(objectState, canvasDir) {
+    let objectIdClean, objectFileName;
+    
+    if (objectState.typeName === 'shape') {
+      objectIdClean = objectState.id.replace('shape:', '');
+      objectFileName = `general-shape-${objectState.type}-${objectIdClean}.json`;
+    } else if (objectState.typeName === 'asset') {
+      objectIdClean = objectState.id.replace('asset:', '');
+      objectFileName = `general-asset-${objectState.type}-${objectIdClean}.json`;
+    } else {
+      console.warn(`Unknown object type: ${objectState.typeName}`);
+      return;
+    }
+    
+    const objectFilePath = path.join(canvasDir, objectFileName);
 
-    // Track this general shape to prevent cleanup
-    this.processedGeneralShapes.add(path.relative(this.rootDir, shapeFilePath));
+    // Track this general object to prevent cleanup
+    this.processedGeneralObjects.add(path.relative(this.rootDir, objectFilePath));
 
-    // Write the raw shape state to a JSON file with minimal metadata
-    const shapeData = {
-      ...shapeState,
+    // Write the raw object state to a JSON file with minimal metadata
+    const objectData = {
+      ...objectState,
       generatedAt: new Date().toISOString()
     };
 
-    fs.writeFileSync(shapeFilePath, JSON.stringify(shapeData, null, 2), 'utf8');
-    console.log(`    🔷 Generated: ${path.relative(this.rootDir, shapeFilePath)}`);
+    fs.writeFileSync(objectFilePath, JSON.stringify(objectData, null, 2), 'utf8');
+    const icon = objectState.typeName === 'asset' ? '📎' : '🔷';
+    console.log(`    ${icon} Generated: ${path.relative(this.rootDir, objectFilePath)}`);
   }
 
   /**
@@ -564,24 +579,24 @@ class CanvasStateUnpacker {
   }
 
   /**
-   * Clean up old general shape files that are no longer in the canvas state
+   * Clean up old general object files that are no longer in the canvas state
    */
-  async cleanupOldGeneralShapes() {
-    console.log('🧹 Cleaning up old general shape files...');
+  async cleanupOldGeneralObjects() {
+    console.log('🧹 Cleaning up old general object files...');
     
     let cleanedCount = 0;
-    const allGeneralShapeFiles = this.findGeneralShapeFiles(this.rootDir);
+    const allGeneralObjectFiles = this.findGeneralObjectFiles(this.rootDir);
     
-    for (const shapeFile of allGeneralShapeFiles) {
-      const relativePath = path.relative(this.rootDir, shapeFile);
-      if (!this.processedGeneralShapes.has(relativePath)) {
-        console.log(`  🗑️  Removing old general shape: ${relativePath}`);
-        fs.rmSync(shapeFile, { force: true });
+    for (const objectFile of allGeneralObjectFiles) {
+      const relativePath = path.relative(this.rootDir, objectFile);
+      if (!this.processedGeneralObjects.has(relativePath)) {
+        console.log(`  🗑️  Removing old general object: ${relativePath}`);
+        fs.rmSync(objectFile, { force: true });
         cleanedCount++;
       }
     }
     
-    console.log(`🧹 Cleaned up ${cleanedCount} old general shape files`);
+    console.log(`🧹 Cleaned up ${cleanedCount} old general object files`);
   }
 
   // Clean up room directories that are not referenced by any canvas-links in any canvas-state.json
@@ -629,21 +644,21 @@ class CanvasStateUnpacker {
   }
 
   /**
-   * Find all general-shape-*.json files recursively
+   * Find all general-shape-*.json and general-asset-*.json files recursively
    */
-  findGeneralShapeFiles(dir) {
-    const shapeFiles = [];
+  findGeneralObjectFiles(dir) {
+    const objectFiles = [];
     
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isFile() && entry.name.startsWith('general-shape-') && entry.name.endsWith('.json')) {
-        shapeFiles.push(path.join(dir, entry.name));
+      if (entry.isFile() && (entry.name.startsWith('general-shape-') || entry.name.startsWith('general-asset-')) && entry.name.endsWith('.json')) {
+        objectFiles.push(path.join(dir, entry.name));
       } else if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        shapeFiles.push(...this.findGeneralShapeFiles(path.join(dir, entry.name)));
+        objectFiles.push(...this.findGeneralObjectFiles(path.join(dir, entry.name)));
       }
     }
     
-    return shapeFiles;
+    return objectFiles;
   }
 }
 
