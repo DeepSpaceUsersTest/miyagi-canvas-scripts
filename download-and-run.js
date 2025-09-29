@@ -49,27 +49,27 @@ async function ensureSetup() {
       
       console.log('📦 Setting up dependencies...');
       
-      // Try container dependencies first, fallback to local install
-      let dependenciesAvailable = false;
-      try {
-        // Try container path
-        process.env.NODE_PATH = '/app/node_modules';
-        require('module')._initPaths();
-        require('@babel/core');
+      // Check if container dependencies are available by checking file system
+      const containerBabel = '/app/node_modules/@babel/core';
+      const localNodeModules = path.join(SCRIPTS_DIR, 'node_modules');
+      
+      console.log(`🔍 Checking container path: ${containerBabel}`);
+      console.log(`🔍 Container exists: ${fs.existsSync(containerBabel)}`);
+      console.log(`🔍 Checking local path: ${path.join(localNodeModules, '@babel/core')}`);
+      console.log(`🔍 Local exists: ${fs.existsSync(path.join(localNodeModules, '@babel/core'))}`);
+      
+      if (fs.existsSync(containerBabel)) {
         console.log('✅ Using pre-installed dependencies from container');
-        dependenciesAvailable = true;
-      } catch (error) {
-        console.log('⚠️ Container dependencies not found, installing locally...');
-        // Reset NODE_PATH and install locally
-        delete process.env.NODE_PATH;
-        require('module')._initPaths();
-        
+      } else if (fs.existsSync(path.join(localNodeModules, '@babel/core'))) {
+        console.log('✅ Using existing local dependencies');
+      } else {
         console.log('📦 Installing dependencies via npm...');
         execSync('npm install --no-optional --prefer-offline', { 
           cwd: SCRIPTS_DIR, 
           stdio: 'inherit',
           timeout: 60000 // 60 second timeout
         });
+        console.log('✅ Dependencies installed successfully');
       }
       
       // Download all required scripts
