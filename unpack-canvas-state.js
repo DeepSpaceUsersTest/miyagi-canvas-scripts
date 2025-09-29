@@ -31,13 +31,10 @@ class CanvasStateUnpacker {
     console.log('🚀 Starting canvas state unpacking with graph traversal...');
     
     try {
-      // Step 1: Identify root room (but don't reference it yet)
       const rootRoomName = await this.identifyRootRoom();
 
-      // Step 2: Graph traversal starting from root
       await this.traverseCanvasGraph(rootRoomName);
 
-      // Step 3: Clean up old widget and room directories based on canvas-state.json content
       await this.cleanupOldWidgets();
       await this.cleanupUnreferencedRooms();
 
@@ -48,20 +45,12 @@ class CanvasStateUnpacker {
     }
   }
 
-  /**
-   * Identify the root room directory
-   * Ensures there is exactly one root room in the repository
-   * Returns the root room name for graph traversal initialization
-   */
+   // Identify the root room directory. Ensures there is exactly one root room in the repository
   async identifyRootRoom() {
-    console.log('🔍 Identifying root room...');
-
     const entries = fs.readdirSync(this.rootDir, { withFileTypes: true });
     const rootRoomDirs = entries
       .filter(entry => entry.isDirectory() && entry.name.startsWith('room-'))
       .map(entry => entry.name);
-
-    console.log(`   Found ${rootRoomDirs.length} root-level room directories: ${rootRoomDirs.join(', ')}`);
 
     if (rootRoomDirs.length === 0) {
       throw new Error('❌ No root room directory found! Expected exactly one room-* directory in repository root.');
@@ -72,7 +61,6 @@ class CanvasStateUnpacker {
     }
 
     const rootRoomName = rootRoomDirs[0];
-    console.log(`✅ Root room identified: ${rootRoomName}`);
     return rootRoomName;
   }
 
@@ -83,7 +71,6 @@ class CanvasStateUnpacker {
   async traverseCanvasGraph(rootRoomName) {
     console.log(`🌐 Starting graph traversal from root: ${rootRoomName}`);
     
-    // Initialize queue with root room path
     const rootRoomPath = path.join(this.rootDir, rootRoomName);
     const queue = [rootRoomPath];
     
@@ -100,22 +87,16 @@ class CanvasStateUnpacker {
         continue;
       }
       
-      // Collect all room directories in current directory as potentially unreferenced
-      this.collectRoomDirectoriesInPath(currentRoomPath);
+      this.collectRoomDirectoriesInPath(currentRoomPath); // Collect all room directories in current directory as potentially unreferenced
       
-      // Process the room
       const processedDocs = await this.unpackRoom(canvasStateFile);
       this.referencedRooms.add(currentRoomName);
       
-      // Add children to queue
       for (const canvasLink of processedDocs.canvasLinks) {
         const targetRoomName = canvasLink.properties.targetCanvasId;
         if(!targetRoomName) continue;
-        // Remove from unreferenced set since it's actually referenced
         this.unreferencedRoomDirs.delete(path.join(currentRoomPath, targetRoomName));
         if (!this.referencedRooms.has(targetRoomName)) {
-          console.log(`  🔗 Found link to: ${targetRoomName}`);
-          // Child room is nested inside current room
           const childRoomPath = path.join(currentRoomPath, targetRoomName);
           queue.push(childRoomPath);
         }
@@ -125,9 +106,7 @@ class CanvasStateUnpacker {
     console.log(`✅ Graph traversal completed. Processed ${this.referencedRooms.size} rooms.`);
   }
 
-  /**
-   * Collect all room-* directories in the given path as potentially unreferenced
-   */
+  // Collect all room-* directories in the given path as potentially unreferenced
   collectRoomDirectoriesInPath(roomPath) {
     try {
       const entries = fs.readdirSync(roomPath, { withFileTypes: true });
@@ -142,12 +121,7 @@ class CanvasStateUnpacker {
     }
   }
 
-  /**
-   * Find canvas-state.json file for a specific room path
-   * Takes the full path to the room directory, not just the room name
-   */
   findCanvasStateFileForRoom(roomPath) {
-    // All rooms (including root) have their canvas-state.json in their own directory
     const canvasStatePath = path.join(roomPath, 'canvas-state.json');
     console.log(`  🔍 Looking for: ${canvasStatePath}`);
     if (fs.existsSync(canvasStatePath)) {
@@ -155,26 +129,6 @@ class CanvasStateUnpacker {
     }
     
     return null;
-  }
-
-  /**
-   * Find all canvas-state.json files recursively
-   */
-  findCanvasStateFiles(dir) {
-    const files = [];
-    
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      
-      if (entry.isFile() && entry.name === 'canvas-state.json') {
-        files.push(fullPath);
-      } else if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        files.push(...this.findCanvasStateFiles(fullPath));
-      }
-    }
-    
-    return files;
   }
 
   /**
@@ -572,13 +526,8 @@ class CanvasStateUnpacker {
     console.log(`🧹 Cleaned up ${cleanedCount} old widget directories`);
   }
 
-  /**
-   * Clean up room directories that are not referenced by any canvas-links in any canvas-state.json
-   * Uses the optimized approach: unreferencedRoomDirs set is populated during BFS traversal
-   */
-  async cleanupUnreferencedRooms() {
-    console.log('🏠 Cleaning up unreferenced room directories...');
-    
+  // Clean up room directories that are not referenced by any canvas-links in any canvas-state.json
+  async cleanupUnreferencedRooms() {    
     let cleanedCount = 0;
     
     console.log(`   Found ${this.unreferencedRoomDirs.size} unreferenced room directories`);
