@@ -93,20 +93,24 @@ class CanvasStateGenerator {
       // Step 3: Load canvas-links from direct child room directories
       const canvasLinks = await this.loadCanvasLinksForParentRoom(roomDir);
 
+      // Step 3.5: Load general shapes from general-shape-*.json files
+      const generalShapes = await this.loadGeneralShapes(roomDir);
+
       // Step 4: Generate tldraw RoomSnapshot
       const roomSnapshot = this.generateRoomSnapshot({
         canvasMetadata,
         globalStorage,
         widgetStorage,
         widgets,
-        canvasLinks
+        canvasLinks,
+        generalShapes
       });
 
       // Step 5: Write canvas-state.json to this room directory
       const canvasStatePath = path.join(roomDir, 'canvas-state.json');
       fs.writeFileSync(canvasStatePath, JSON.stringify(roomSnapshot, null, 2), 'utf8');
       
-      console.log(`✅ Generated canvas-state.json for ${roomName} with ${widgets.length} widgets and ${canvasLinks.length} canvas-links`);
+      console.log(`✅ Generated canvas-state.json for ${roomName} with ${widgets.length} widgets, ${canvasLinks.length} canvas-links, and ${generalShapes.length} general shapes`);
       return true;
 
     } catch (error) {
@@ -288,10 +292,53 @@ class CanvasStateGenerator {
   }
 
   /**
+   * Load all general shapes from general-shape-*.json files in a room
+   */
+  async loadGeneralShapes(roomDir) {
+    const entries = fs.readdirSync(roomDir, { withFileTypes: true });
+    const generalShapeFiles = entries
+      .filter(entry => entry.isFile() && entry.name.startsWith('general-shape-') && entry.name.endsWith('.json'))
+      .map(entry => entry.name);
+
+    console.log(`  🔷 Found ${generalShapeFiles.length} general shape files in ${path.basename(roomDir)}`);
+
+    const generalShapes = [];
+
+    for (const shapeFile of generalShapeFiles) {
+      const generalShape = await this.loadGeneralShape(roomDir, shapeFile);
+      if (generalShape) {
+        generalShapes.push(generalShape);
+      }
+    }
+
+    return generalShapes;
+  }
+
+  /**
+   * Load a single general shape from general-shape-*.json file
+   */
+  async loadGeneralShape(roomDir, shapeFileName) {
+    const shapeFilePath = path.join(roomDir, shapeFileName);
+    
+    try {
+      const shapeData = JSON.parse(fs.readFileSync(shapeFilePath, 'utf8'));
+      
+      // Remove the generatedAt timestamp that was added during unpacking
+      const { generatedAt, ...cleanShapeState } = shapeData;
+      
+      return cleanShapeState;
+
+    } catch (error) {
+      console.error(`❌ Error loading general shape ${shapeFileName}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Generate tldraw RoomSnapshot from room data
    */
   generateRoomSnapshot(roomData) {
-    const { canvasMetadata, globalStorage, widgetStorage, widgets, canvasLinks } = roomData;
+    const { canvasMetadata, globalStorage, widgetStorage, widgets, canvasLinks, generalShapes } = roomData;
     
     // Extract canvas info from metadata (preserve existing values)
     const roomId = canvasMetadata?.canvas?.roomId || 'room-generated';
@@ -336,7 +383,7 @@ class CanvasStateGenerator {
           id: 'canvas_storage:main',
           typeName: 'canvas_storage'
         },
-        lastChangedClock: canvasMetadata?.canvasStorage?.lastChangedClock || (widgets.length + canvasLinks.length + 2)
+        lastChangedClock: canvasMetadata?.canvasStorage?.lastChangedClock || (widgets.length + canvasLinks.length + generalShapes.length + 2)
       }
     ];
 
@@ -383,6 +430,16 @@ class CanvasStateGenerator {
         lastChangedClock: canvasLink.lastChangedClock || (shapeIndex + 2)
       };
       documents.push(linkDocument);
+      shapeIndex++;
+    }
+
+    // Add general shape records
+    for (const generalShape of generalShapes) {
+      const generalShapeDocument = {
+        state: generalShape,
+        lastChangedClock: generalShape.lastChangedClock || (shapeIndex + 2)
+      };
+      documents.push(generalShapeDocument);
       shapeIndex++;
     }
 

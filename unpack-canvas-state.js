@@ -20,6 +20,7 @@ class CanvasStateUnpacker {
   constructor(rootDir = process.cwd()) {
     this.rootDir = rootDir;
     this.processedWidgets = new Set();
+    this.processedGeneralShapes = new Set();
     this.referencedRooms = new Set(); // Rooms referenced by canvas-links across all canvas-state.json files
     this.unreferencedRoomDirs = new Set(); // Room directories that are potentially unreferenced (populated during BFS)
   }
@@ -36,6 +37,7 @@ class CanvasStateUnpacker {
       await this.traverseCanvasGraph(rootRoomName);
 
       await this.cleanupOldWidgets();
+      await this.cleanupOldGeneralShapes();
       await this.cleanupUnreferencedRooms();
 
       console.log('✅ Canvas state unpacking completed successfully!');
@@ -152,7 +154,8 @@ class CanvasStateUnpacker {
         pages: [],
         canvasStorage: null,
         widgets: [],
-        canvasLinks: []
+        canvasLinks: [],
+        generalShapes: []
       };
 
       // First pass: Extract canvas_storage to get widget storage data
@@ -176,6 +179,12 @@ class CanvasStateUnpacker {
       // (Every room gets these files - no special root treatment)
       await this.generateCanvasMetadata(processedDocs.document, processedDocs.pages, canvasState, roomDir);
       await this.generateGlobalStorage(processedDocs.canvasStorage, roomDir);
+
+      // Step 2.5: Generate general shape files
+      console.log(`  🔷 Found ${processedDocs.generalShapes.length} general shapes in ${roomName}`);
+      for (const generalShape of processedDocs.generalShapes) {
+        await this.generateGeneralShape(generalShape, roomDir);
+      }
 
       // Step 3: Generate widget directories in THIS room
       console.log(`  🧩 Found ${processedDocs.widgets.length} widgets in ${roomName}`);
@@ -280,8 +289,8 @@ class CanvasStateUnpacker {
       case 'canvas-link':
         return this.processCanvasLink(state, lastChangedClock);
       default:
-        // Ignore other shape types (arrows, text, etc.)
-        return null;
+        // Return the raw state for unknown shape types
+        return state;
     }
   }
 
@@ -376,6 +385,13 @@ class CanvasStateUnpacker {
       case 'canvas-link':
         processedDocs.canvasLinks.push(result);
         break;
+      default:
+        // If it has a typeName of 'shape' but isn't miyagi-widget or canvas-link,
+        // it's a general shape (raw state object)
+        if (result.typeName === 'shape') {
+          processedDocs.generalShapes.push(result);
+        }
+        break;
     }
   }
 
@@ -464,6 +480,27 @@ class CanvasStateUnpacker {
   }
 
   /**
+   * Generate a general shape file for unknown shape types
+   */
+  async generateGeneralShape(shapeState, canvasDir) {
+    const shapeIdClean = shapeState.id.replace('shape:', '');
+    const shapeFileName = `general-shape-${shapeState.type}-${shapeIdClean}.json`;
+    const shapeFilePath = path.join(canvasDir, shapeFileName);
+
+    // Track this general shape to prevent cleanup
+    this.processedGeneralShapes.add(path.relative(this.rootDir, shapeFilePath));
+
+    // Write the raw shape state to a JSON file with minimal metadata
+    const shapeData = {
+      ...shapeState,
+      generatedAt: new Date().toISOString()
+    };
+
+    fs.writeFileSync(shapeFilePath, JSON.stringify(shapeData, null, 2), 'utf8');
+    console.log(`    🔷 Generated: ${path.relative(this.rootDir, shapeFilePath)}`);
+  }
+
+  /**
    * Store canvas-link information in the target room directory
    */
   async storeCanvasLinkInfo(canvasLink, parentCanvasDir) {
@@ -526,6 +563,27 @@ class CanvasStateUnpacker {
     console.log(`🧹 Cleaned up ${cleanedCount} old widget directories`);
   }
 
+  /**
+   * Clean up old general shape files that are no longer in the canvas state
+   */
+  async cleanupOldGeneralShapes() {
+    console.log('🧹 Cleaning up old general shape files...');
+    
+    let cleanedCount = 0;
+    const allGeneralShapeFiles = this.findGeneralShapeFiles(this.rootDir);
+    
+    for (const shapeFile of allGeneralShapeFiles) {
+      const relativePath = path.relative(this.rootDir, shapeFile);
+      if (!this.processedGeneralShapes.has(relativePath)) {
+        console.log(`  🗑️  Removing old general shape: ${relativePath}`);
+        fs.rmSync(shapeFile, { force: true });
+        cleanedCount++;
+      }
+    }
+    
+    console.log(`🧹 Cleaned up ${cleanedCount} old general shape files`);
+  }
+
   // Clean up room directories that are not referenced by any canvas-links in any canvas-state.json
   async cleanupUnreferencedRooms() {    
     let cleanedCount = 0;
@@ -568,6 +626,24 @@ class CanvasStateUnpacker {
     }
     
     return shapeDirs;
+  }
+
+  /**
+   * Find all general-shape-*.json files recursively
+   */
+  findGeneralShapeFiles(dir) {
+    const shapeFiles = [];
+    
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.startsWith('general-shape-') && entry.name.endsWith('.json')) {
+        shapeFiles.push(path.join(dir, entry.name));
+      } else if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        shapeFiles.push(...this.findGeneralShapeFiles(path.join(dir, entry.name)));
+      }
+    }
+    
+    return shapeFiles;
   }
 }
 
