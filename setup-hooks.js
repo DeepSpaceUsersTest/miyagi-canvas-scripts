@@ -112,6 +112,18 @@ async function setupHooks() {
   fs.chmodSync(postMergePath, '755'); // Make executable
   console.log('✅ Created post-merge hook');
 
+  // Run unpack-canvas-state.js to initialize widget directories
+  console.log('📦 Running initial canvas state unpacking...');
+  try {
+    execSync('node .miyagi/unpack-canvas-state.js', { 
+      stdio: 'inherit',
+      timeout: 30000 // 30 second timeout
+    });
+    console.log('✅ Canvas state unpacking completed');
+  } catch (error) {
+    console.log('⚠️ Canvas state unpacking failed (this is normal if no canvas-state.json exists yet)');
+  }
+
   console.log('🎉 Git hooks setup completed successfully!');
   console.log('');
   console.log('Hooks installed:');
