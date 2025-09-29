@@ -1,12 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Download and Run Script - Clean Version
- * 
- * Simple logic:
- * 1. If in container, use pre-installed dependencies
- * 2. If not, install dependencies locally
- * 3. Download scripts and run them
+ * Download and Run Script - Simple Version
  */
 
 const fs = require('fs');
@@ -46,12 +41,11 @@ async function ensureSetup() {
         JSON.stringify(packageJson, null, 2)
       );
       
-      // Check if we're in a container with pre-installed dependencies
-      const containerBabel = '/app/node_modules/@babel/core';
-      if (fs.existsSync(containerBabel)) {
+      // Check if we're in container with pre-installed dependencies
+      if (fs.existsSync('/app/node_modules/@babel/core')) {
         console.log('✅ Using pre-installed dependencies from container');
       } else {
-        console.log('📦 Installing dependencies locally...');
+        console.log('📦 Installing dependencies...');
         execSync('npm install', { 
           cwd: SCRIPTS_DIR, 
           stdio: 'inherit'
@@ -103,7 +97,7 @@ async function downloadScript(scriptName) {
 }
 
 /**
- * Run script - dependencies should just work via normal require()
+ * Run script - dependencies should just work
  */
 async function runScript(scriptName) {
   const scriptPath = path.join(SCRIPTS_DIR, scriptName);

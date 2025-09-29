@@ -78,7 +78,7 @@ async function setupHooks() {
       
       // Run unpack to initialize canvas structure
       console.log('📦 Initializing canvas structure...');
-      execSync('node .miyagi/unpack-canvas-state.js', { 
+      execSync('node download-and-run.js unpack-canvas-state.js', { 
         stdio: 'inherit'
       });
       
