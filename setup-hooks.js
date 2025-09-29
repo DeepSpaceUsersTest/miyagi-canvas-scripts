@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 console.log('🔧 Setting up Miyagi git hooks...');
 
@@ -9,15 +10,11 @@ console.log('🔧 Setting up Miyagi git hooks...');
 const preCommitHook = `#!/bin/sh
 
 # Miyagi Canvas Repository Pre-commit Hook
-# This hook runs before each commit to:
-# 1. Compile JSX widgets to HTML
-# 2. Generate canvas-state.json from widget files
-
 echo "🔨 Running Miyagi pre-commit hook..."
 
-# Ensure fresh scripts are downloaded
+# Ensure scripts are set up
 if [ ! -d ".miyagi" ]; then
-  echo "📥 Setting up Miyagi scripts (first time)..."
+  echo "📥 Setting up Miyagi scripts..."
   node download-and-run.js compile.js >/dev/null 2>&1 || echo "⚠️ Script setup may be incomplete"
 fi
 
@@ -44,9 +41,6 @@ exit 0`;
 const postMergeHook = `#!/bin/sh
 
 # Miyagi Canvas Repository Post-merge Hook
-# This hook runs after each merge/pull to:
-# 1. Unpack canvas-state.json files into widget directories
-
 echo "📦 Running Miyagi post-merge hook..."
 
 # Run unpack-canvas-state.js to extract widget files from canvas-state.json
@@ -62,75 +56,55 @@ exit 0`;
 async function setupHooks() {
   try {
     // Ensure .git/hooks directory exists
-  const hooksDir = path.join('.git', 'hooks');
-  if (!fs.existsSync(hooksDir)) {
-    console.log('❌ .git/hooks directory not found. Make sure you are in a git repository.');
-    process.exit(1);
-  }
-
-  // Force fresh download of all scripts
-  console.log('📥 Downloading fresh Miyagi scripts...');
-  if (fs.existsSync('download-and-run.js')) {
-    const { execSync } = require('child_process');
-    
-    // Remove existing .miyagi directory to force fresh downloads
-    if (fs.existsSync('.miyagi')) {
-      console.log('🗑️ Removing cached scripts to ensure fresh downloads...');
-      fs.rmSync('.miyagi', { recursive: true, force: true });
+    const hooksDir = path.join('.git', 'hooks');
+    if (!fs.existsSync(hooksDir)) {
+      console.log('❌ .git/hooks directory not found. Make sure you are in a git repository.');
+      process.exit(1);
     }
-    
-    // Use download-and-run.js once to set up everything (it already handles parallel downloads internally)
-    console.log('🔄 Setting up dependencies and downloading scripts...');
-    
-    // Run download-and-run.js once - it will:
-    // 1. Install npm dependencies once
-    // 2. Download all required scripts
-    // 3. Handle everything efficiently
-    try {
+
+    // Set up scripts and dependencies
+    if (fs.existsSync('download-and-run.js')) {
+      console.log('📥 Setting up Miyagi scripts...');
+      
+      // Remove existing .miyagi to force fresh setup
+      if (fs.existsSync('.miyagi')) {
+        fs.rmSync('.miyagi', { recursive: true, force: true });
+      }
+      
+      // Run setup
       execSync('node download-and-run.js compile.js', { 
-        stdio: 'inherit',
-        timeout: 120000 // 2 minute timeout for full setup
+        stdio: 'inherit'
       });
-      console.log('✅ Dependencies and scripts setup completed!');
-    } catch (error) {
-      console.error('❌ Setup failed:', error.message);
-      throw error;
+      
+      // Run unpack to initialize canvas structure
+      console.log('📦 Initializing canvas structure...');
+      execSync('node .miyagi/unpack-canvas-state.js', { 
+        stdio: 'inherit'
+      });
+      
+      console.log('✅ Setup completed!');
+    } else {
+      console.log('⚠️ download-and-run.js not found. Scripts will be downloaded on first hook run.');
     }
-  } else {
-    console.log('⚠️  download-and-run.js not found. Scripts will be downloaded on first hook run.');
-  }
 
-  // Write pre-commit hook
-  const preCommitPath = path.join(hooksDir, 'pre-commit');
-  fs.writeFileSync(preCommitPath, preCommitHook);
-  fs.chmodSync(preCommitPath, '755'); // Make executable
-  console.log('✅ Created pre-commit hook');
+    // Create git hooks
+    const preCommitPath = path.join(hooksDir, 'pre-commit');
+    fs.writeFileSync(preCommitPath, preCommitHook);
+    fs.chmodSync(preCommitPath, '755');
+    console.log('✅ Created pre-commit hook');
 
-  // Write post-merge hook
-  const postMergePath = path.join(hooksDir, 'post-merge');
-  fs.writeFileSync(postMergePath, postMergeHook);
-  fs.chmodSync(postMergePath, '755'); // Make executable
-  console.log('✅ Created post-merge hook');
+    const postMergePath = path.join(hooksDir, 'post-merge');
+    fs.writeFileSync(postMergePath, postMergeHook);
+    fs.chmodSync(postMergePath, '755');
+    console.log('✅ Created post-merge hook');
 
-  // Run unpack-canvas-state.js to initialize widget directories
-  console.log('📦 Running initial canvas state unpacking...');
-  try {
-    execSync('node .miyagi/unpack-canvas-state.js', { 
-      stdio: 'inherit',
-      timeout: 30000 // 30 second timeout
-    });
-    console.log('✅ Canvas state unpacking completed');
-  } catch (error) {
-    console.log('⚠️ Canvas state unpacking failed (this is normal if no canvas-state.json exists yet)');
-  }
-
-  console.log('🎉 Git hooks setup completed successfully!');
-  console.log('');
-  console.log('Hooks installed:');
-  console.log('  • pre-commit: Compiles JSX and generates canvas-state.json');
-  console.log('  • post-merge: Unpacks canvas-state.json into widget directories');
-  console.log('');
-  console.log('Your repository is now ready for automated canvas synchronization!');
+    console.log('🎉 Git hooks setup completed successfully!');
+    console.log('');
+    console.log('Hooks installed:');
+    console.log('  • pre-commit: Compiles JSX and generates canvas-state.json');
+    console.log('  • post-merge: Unpacks canvas-state.json into widget directories');
+    console.log('');
+    console.log('Your repository is now ready for automated canvas synchronization!');
 
   } catch (error) {
     console.error('❌ Failed to setup git hooks:', error.message);
@@ -139,7 +113,4 @@ async function setupHooks() {
 }
 
 // Run the setup
-setupHooks().catch(error => {
-  console.error('❌ Setup failed:', error.message);
-  process.exit(1);
-});
+setupHooks();
