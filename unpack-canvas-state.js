@@ -88,10 +88,10 @@ class CanvasStateUnpacker {
       }
       
       this.collectRoomDirectoriesInPath(currentRoomPath); // Collect all room directories in current directory as potentially unreferenced
-      
-      const processedDocs = await this.unpackRoom(canvasStateFile);
       this.referencedRooms.add(currentRoomName);
       
+      const processedDocs = await this.unpackRoom(canvasStateFile);
+
       for (const canvasLink of processedDocs.canvasLinks) {
         const targetRoomName = canvasLink.properties.targetCanvasId;
         if(!targetRoomName) continue;
