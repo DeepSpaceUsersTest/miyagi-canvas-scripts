@@ -51,7 +51,7 @@ widgets.forEach(widget => {
     const jsx = fs.readFileSync(jsxFile, 'utf8');
     
     const result = babel.transformSync(jsx, {
-      presets: [[babelPresetPath, { runtime: 'classic' }]] // Use absolute path
+      presets: [[babelPresetPath, { runtime: 'classic' }]] // Module name will be resolved via NODE_PATH
     });
     
     // Remove import statements and convert export default to const WidgetComponent

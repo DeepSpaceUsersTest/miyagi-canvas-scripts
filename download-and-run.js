@@ -49,9 +49,28 @@ async function ensureSetup() {
       
       console.log('📦 Setting up dependencies...');
       
-      console.log('📦 Using pre-installed dependencies from container...');
-      // Dependencies are already available in the container at /app/node_modules
-      // No need to download or install anything
+      // Try container dependencies first, fallback to local install
+      let dependenciesAvailable = false;
+      try {
+        // Try container path
+        process.env.NODE_PATH = '/app/node_modules';
+        require('module')._initPaths();
+        require('@babel/core');
+        console.log('✅ Using pre-installed dependencies from container');
+        dependenciesAvailable = true;
+      } catch (error) {
+        console.log('⚠️ Container dependencies not found, installing locally...');
+        // Reset NODE_PATH and install locally
+        delete process.env.NODE_PATH;
+        require('module')._initPaths();
+        
+        console.log('📦 Installing dependencies via npm...');
+        execSync('npm install --no-optional --prefer-offline', { 
+          cwd: SCRIPTS_DIR, 
+          stdio: 'inherit',
+          timeout: 60000 // 60 second timeout
+        });
+      }
       
       // Download all required scripts
       const scripts = [
@@ -145,8 +164,23 @@ async function runScript(scriptName) {
   
   console.log(`🔧 Running ${scriptName}...`);
   
-  // Dependencies are already available in the container at /app/node_modules
-  // No need to modify NODE_PATH
+  // Set NODE_PATH to find dependencies
+  const originalNodePath = process.env.NODE_PATH;
+  let needsNodePath = false;
+  
+  // Try container path first, fallback to local
+  try {
+    process.env.NODE_PATH = '/app/node_modules' + (originalNodePath ? `:${originalNodePath}` : '');
+    require('module')._initPaths();
+    require('@babel/core');
+    needsNodePath = true;
+  } catch (error) {
+    // Fallback to local .miyagi/node_modules
+    const miyagiNodeModules = path.resolve(SCRIPTS_DIR, 'node_modules');
+    process.env.NODE_PATH = miyagiNodeModules + (originalNodePath ? `:${originalNodePath}` : '');
+    require('module')._initPaths();
+    needsNodePath = true;
+  }
   
   try {
     // Change to script directory for execution
@@ -160,7 +194,15 @@ async function runScript(scriptName) {
     console.error(`❌ Script execution failed:`, error.message);
     throw error;
   } finally {
-    // No cleanup needed since we didn't modify NODE_PATH
+    // Restore original NODE_PATH only if we modified it
+    if (needsNodePath) {
+      if (originalNodePath) {
+        process.env.NODE_PATH = originalNodePath;
+      } else {
+        delete process.env.NODE_PATH;
+      }
+      require('module')._initPaths();
+    }
   }
 }
 
