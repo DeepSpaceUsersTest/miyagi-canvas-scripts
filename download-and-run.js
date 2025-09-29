@@ -109,9 +109,22 @@ async function runScript(scriptName) {
   console.log(`🔧 Running ${scriptName}...`);
   
   try {
-    // Just run the script - dependencies should be found automatically
+    // Clear require cache and load the script
     delete require.cache[path.resolve(scriptPath)];
-    require(path.resolve(scriptPath));
+    const scriptModule = require(path.resolve(scriptPath));
+    
+    // Check if the script exports a class or has a run method
+    if (scriptModule && typeof scriptModule === 'function') {
+      // If it's a class constructor, instantiate and run
+      const instance = new scriptModule();
+      if (typeof instance.run === 'function') {
+        await instance.run();
+      }
+    } else if (scriptModule && typeof scriptModule.run === 'function') {
+      // If it exports a run function directly
+      await scriptModule.run();
+    }
+    // If no async methods found, the script should have executed during require()
     
   } catch (error) {
     console.error(`❌ Script execution failed:`, error.message);
