@@ -93,20 +93,24 @@ class CanvasStateGenerator {
       // Step 3: Load canvas-links from direct child room directories
       const canvasLinks = await this.loadCanvasLinksForParentRoom(roomDir);
 
-      // Step 4: Generate tldraw RoomSnapshot
+      // Step 4: Load general objects from general-shape-*.json and general-asset-*.json files
+      const generalObjects = await this.loadGeneralObjects(roomDir);
+
+      // Step 5: Generate tldraw RoomSnapshot
       const roomSnapshot = this.generateRoomSnapshot({
         canvasMetadata,
         globalStorage,
         widgetStorage,
         widgets,
-        canvasLinks
+        canvasLinks,
+        generalObjects
       });
 
-      // Step 5: Write canvas-state.json to this room directory
+      // Step 6: Write canvas-state.json to this room directory
       const canvasStatePath = path.join(roomDir, 'canvas-state.json');
       fs.writeFileSync(canvasStatePath, JSON.stringify(roomSnapshot, null, 2), 'utf8');
       
-      console.log(`✅ Generated canvas-state.json for ${roomName} with ${widgets.length} widgets and ${canvasLinks.length} canvas-links`);
+      console.log(`✅ Generated canvas-state.json for ${roomName} with ${widgets.length} widgets, ${canvasLinks.length} canvas-links, and ${generalObjects.length} general objects`);
       return true;
 
     } catch (error) {
@@ -287,11 +291,47 @@ class CanvasStateGenerator {
     return canvasLinks;
   }
 
+  // Load all general objects from general-shape-*.json and general-asset-*.json files in a room
+  async loadGeneralObjects(roomDir) {
+    const entries = fs.readdirSync(roomDir, { withFileTypes: true });
+    const generalObjectFiles = entries
+      .filter(entry => entry.isFile() && (entry.name.startsWith('general-shape-') || entry.name.startsWith('general-asset-')) && entry.name.endsWith('.json'))
+      .map(entry => entry.name);
+
+    console.log(`  🔷 Found ${generalObjectFiles.length} general object files in ${path.basename(roomDir)}`);
+
+    const generalObjects = [];
+
+    for (const objectFile of generalObjectFiles) {
+      const generalObject = await this.loadGeneralObject(roomDir, objectFile);
+      if (generalObject) {
+        generalObjects.push(generalObject);
+      }
+    }
+
+    return generalObjects;
+  }
+
+  // Load a single general object from general-shape-*.json or general-asset-*.json file
+  async loadGeneralObject(roomDir, objectFileName) {
+    const objectFilePath = path.join(roomDir, objectFileName);
+    
+    try {
+      const objectData = JSON.parse(fs.readFileSync(objectFilePath, 'utf8'));      
+      const { generatedAt, ...cleanObjectState } = objectData;
+      return cleanObjectState;
+
+    } catch (error) {
+      console.error(`❌ Error loading general object ${objectFileName}:`, error);
+      return null;
+    }
+  }
+
   /**
    * Generate tldraw RoomSnapshot from room data
    */
   generateRoomSnapshot(roomData) {
-    const { canvasMetadata, globalStorage, widgetStorage, widgets, canvasLinks } = roomData;
+    const { canvasMetadata, globalStorage, widgetStorage, widgets, canvasLinks, generalObjects } = roomData;
     
     // Extract canvas info from metadata (preserve existing values)
     const roomId = canvasMetadata?.canvas?.roomId || 'room-generated';
@@ -336,7 +376,7 @@ class CanvasStateGenerator {
           id: 'canvas_storage:main',
           typeName: 'canvas_storage'
         },
-        lastChangedClock: canvasMetadata?.canvasStorage?.lastChangedClock || (widgets.length + canvasLinks.length + 2)
+        lastChangedClock: canvasMetadata?.canvasStorage?.lastChangedClock || (widgets.length + canvasLinks.length + generalObjects.length + 2)
       }
     ];
 
@@ -383,6 +423,15 @@ class CanvasStateGenerator {
         lastChangedClock: canvasLink.lastChangedClock || (shapeIndex + 2)
       };
       documents.push(linkDocument);
+      shapeIndex++;
+    }
+
+    for (const generalObject of generalObjects) {
+      const generalObjectDocument = {
+        state: generalObject,
+        lastChangedClock: generalObject.lastChangedClock || (shapeIndex + 2)
+      };
+      documents.push(generalObjectDocument);
       shapeIndex++;
     }
 
