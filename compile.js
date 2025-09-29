@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const babel = require('@babel/core');
 
-// Get the absolute path to the babel preset (relative to this script)
-const babelPresetPath = path.join(__dirname, 'node_modules', '@babel', 'preset-react');
+// Use the container's pre-installed babel preset
+const babelPresetPath = '@babel/preset-react'; // Use module name, Node.js will resolve from /app/node_modules
 
 // Recursively find all widget-* directories
 function findShapeDirectories(dir = '.', found = []) {
