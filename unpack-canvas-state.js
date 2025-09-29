@@ -176,23 +176,22 @@ class CanvasStateUnpacker {
       }
 
       // Step 2: Generate metadata and storage files for THIS room
-      // (Every room gets these files - no special root treatment)
       await this.generateCanvasMetadata(processedDocs.document, processedDocs.pages, canvasState, roomDir);
       await this.generateGlobalStorage(processedDocs.canvasStorage, roomDir);
 
-      // Step 2.5: Generate general object files
+      // Step 3: Generate general object files (arbitrary shapes and assets)
       console.log(`  🔷 Found ${processedDocs.generalObjects.length} general objects in ${roomName}`);
       for (const generalObject of processedDocs.generalObjects) {
         await this.generateGeneralObject(generalObject, roomDir);
       }
 
-      // Step 3: Generate widget directories in THIS room
+      // Step 4: Generate widget directories in THIS room
       console.log(`  🧩 Found ${processedDocs.widgets.length} widgets in ${roomName}`);
       for (const widget of processedDocs.widgets) {
         await this.generateWidgetDirectory(widget, roomDir);
       }
 
-      // Step 4: Store canvas-link info in target room directories
+      // Step 5: Store canvas-link info in target room directories
       if (processedDocs.canvasLinks.length > 0) {
         console.log(`  🔗 Found ${processedDocs.canvasLinks.length} canvas-links in ${roomName}`);
         for (const canvasLink of processedDocs.canvasLinks) {
@@ -291,7 +290,6 @@ class CanvasStateUnpacker {
       case 'canvas-link':
         return this.processCanvasLink(state, lastChangedClock);
       default:
-        // Return the raw state for unknown shape types
         return state;
     }
   }
@@ -388,9 +386,6 @@ class CanvasStateUnpacker {
         processedDocs.canvasLinks.push(result);
         break;
       default:
-        // If it has a typeName of 'shape' but isn't miyagi-widget or canvas-link,
-        // it's a general shape (raw state object)
-        // Also handle all assets
         if (result.typeName === 'shape' || result.typeName === 'asset') {
           processedDocs.generalObjects.push(result);
         }
@@ -482,9 +477,7 @@ class CanvasStateUnpacker {
     console.log(`    🧩 Generated: ${path.relative(this.rootDir, widgetDir)}/`);
   }
 
-  /**
-   * Generate a general object file for unknown shape types and image assets
-   */
+  // Generate a general object file for unknown shape types and image assets
   async generateGeneralObject(objectState, canvasDir) {
     let objectIdClean, objectFileName;
     
@@ -501,10 +494,8 @@ class CanvasStateUnpacker {
     
     const objectFilePath = path.join(canvasDir, objectFileName);
 
-    // Track this general object to prevent cleanup
     this.processedGeneralObjects.add(path.relative(this.rootDir, objectFilePath));
 
-    // Write the raw object state to a JSON file with minimal metadata
     const objectData = {
       ...objectState,
       generatedAt: new Date().toISOString()
@@ -557,9 +548,7 @@ class CanvasStateUnpacker {
     console.log(`    🔗 Generated: ${path.relative(this.rootDir, canvasLinkInfoPath)}`);
   }
 
-  /**
-   * Clean up old widget directories that are no longer in the canvas state
-   */
+  // Clean up old widget directories that are no longer in the canvas state
   async cleanupOldWidgets() {
     console.log('🧹 Cleaning up old widget directories...');
     
@@ -578,12 +567,8 @@ class CanvasStateUnpacker {
     console.log(`🧹 Cleaned up ${cleanedCount} old widget directories`);
   }
 
-  /**
-   * Clean up old general object files that are no longer in the canvas state
-   */
-  async cleanupOldGeneralObjects() {
-    console.log('🧹 Cleaning up old general object files...');
-    
+  // Clean up old general object files that are no longer in the canvas state
+  async cleanupOldGeneralObjects() {    
     let cleanedCount = 0;
     const allGeneralObjectFiles = this.findGeneralObjectFiles(this.rootDir);
     

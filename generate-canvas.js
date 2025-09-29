@@ -93,10 +93,10 @@ class CanvasStateGenerator {
       // Step 3: Load canvas-links from direct child room directories
       const canvasLinks = await this.loadCanvasLinksForParentRoom(roomDir);
 
-      // Step 3.5: Load general objects from general-shape-*.json and general-asset-*.json files
+      // Step 4: Load general objects from general-shape-*.json and general-asset-*.json files
       const generalObjects = await this.loadGeneralObjects(roomDir);
 
-      // Step 4: Generate tldraw RoomSnapshot
+      // Step 5: Generate tldraw RoomSnapshot
       const roomSnapshot = this.generateRoomSnapshot({
         canvasMetadata,
         globalStorage,
@@ -106,7 +106,7 @@ class CanvasStateGenerator {
         generalObjects
       });
 
-      // Step 5: Write canvas-state.json to this room directory
+      // Step 6: Write canvas-state.json to this room directory
       const canvasStatePath = path.join(roomDir, 'canvas-state.json');
       fs.writeFileSync(canvasStatePath, JSON.stringify(roomSnapshot, null, 2), 'utf8');
       
@@ -291,9 +291,7 @@ class CanvasStateGenerator {
     return canvasLinks;
   }
 
-  /**
-   * Load all general objects from general-shape-*.json and general-asset-*.json files in a room
-   */
+  // Load all general objects from general-shape-*.json and general-asset-*.json files in a room
   async loadGeneralObjects(roomDir) {
     const entries = fs.readdirSync(roomDir, { withFileTypes: true });
     const generalObjectFiles = entries
@@ -314,18 +312,13 @@ class CanvasStateGenerator {
     return generalObjects;
   }
 
-  /**
-   * Load a single general object from general-shape-*.json or general-asset-*.json file
-   */
+  // Load a single general object from general-shape-*.json or general-asset-*.json file
   async loadGeneralObject(roomDir, objectFileName) {
     const objectFilePath = path.join(roomDir, objectFileName);
     
     try {
-      const objectData = JSON.parse(fs.readFileSync(objectFilePath, 'utf8'));
-      
-      // Remove the generatedAt timestamp that was added during unpacking
+      const objectData = JSON.parse(fs.readFileSync(objectFilePath, 'utf8'));      
       const { generatedAt, ...cleanObjectState } = objectData;
-      
       return cleanObjectState;
 
     } catch (error) {
@@ -433,7 +426,6 @@ class CanvasStateGenerator {
       shapeIndex++;
     }
 
-    // Add general object records (shapes and assets)
     for (const generalObject of generalObjects) {
       const generalObjectDocument = {
         state: generalObject,
