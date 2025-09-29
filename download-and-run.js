@@ -49,59 +49,9 @@ async function ensureSetup() {
       
       console.log('📦 Setting up dependencies...');
       
-      // Try to download pre-built node_modules bundle first (much faster)
-      const bundleUrl = `${SCRIPTS_URL}/node_modules.tar.gz`;
-      let bundleDownloaded = false;
-      
-      try {
-        console.log('⚡ Attempting fast setup with pre-built dependencies...');
-        
-        if (typeof fetch !== 'undefined') {
-          const response = await fetch(bundleUrl);
-          if (response.ok) {
-            const buffer = await response.arrayBuffer();
-            const fs = require('fs');
-            const path = require('path');
-            const { execSync } = require('child_process');
-            
-            // Write bundle to temp file
-            const bundlePath = path.join(SCRIPTS_DIR, 'node_modules.tar.gz');
-            fs.writeFileSync(bundlePath, Buffer.from(buffer));
-            
-            // Extract bundle
-            execSync('tar -xzf node_modules.tar.gz', { 
-              cwd: SCRIPTS_DIR, 
-              stdio: 'inherit' 
-            });
-            
-            // Clean up
-            fs.unlinkSync(bundlePath);
-            
-            console.log('✅ Fast setup completed with pre-built dependencies!');
-            bundleDownloaded = true;
-          }
-        } else {
-          // Fallback using curl for older Node versions
-          execSync(`curl -L "${bundleUrl}" | tar -xz`, { 
-            cwd: SCRIPTS_DIR, 
-            stdio: 'inherit' 
-          });
-          console.log('✅ Fast setup completed with pre-built dependencies!');
-          bundleDownloaded = true;
-        }
-      } catch (error) {
-        console.log('⚠️ Pre-built bundle not available, falling back to npm install...');
-      }
-      
-      // Fallback to npm install if bundle download failed
-      if (!bundleDownloaded) {
-        console.log('📦 Installing dependencies via npm...');
-        execSync('npm install --no-optional --prefer-offline', { 
-          cwd: SCRIPTS_DIR, 
-          stdio: 'inherit',
-          timeout: 60000 // 60 second timeout
-        });
-      }
+      console.log('📦 Using pre-installed dependencies from container...');
+      // Dependencies are already available in the container at /app/node_modules
+      // No need to download or install anything
       
       // Download all required scripts
       const scripts = [
@@ -195,14 +145,8 @@ async function runScript(scriptName) {
   
   console.log(`🔧 Running ${scriptName}...`);
   
-  // Set NODE_PATH so scripts can find dependencies
-  const originalNodePath = process.env.NODE_PATH;
-  const miyagiNodeModules = path.resolve(SCRIPTS_DIR, 'node_modules');
-  
-  process.env.NODE_PATH = miyagiNodeModules + (originalNodePath ? `:${originalNodePath}` : '');
-  
-  // Refresh module paths
-  require('module')._initPaths();
+  // Dependencies are already available in the container at /app/node_modules
+  // No need to modify NODE_PATH
   
   try {
     // Change to script directory for execution
@@ -216,13 +160,7 @@ async function runScript(scriptName) {
     console.error(`❌ Script execution failed:`, error.message);
     throw error;
   } finally {
-    // Restore original NODE_PATH
-    if (originalNodePath) {
-      process.env.NODE_PATH = originalNodePath;
-    } else {
-      delete process.env.NODE_PATH;
-    }
-    require('module')._initPaths();
+    // No cleanup needed since we didn't modify NODE_PATH
   }
 }
 
