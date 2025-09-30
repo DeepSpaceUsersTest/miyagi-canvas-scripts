@@ -5,44 +5,15 @@ const path = require('path');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
 
-/**
- * Generate a random room ID similar to the existing format
- * @returns {string} Room ID like "room-1a7b548b-0c59-4a58-9753-e824eb99a2c9"
- */
-function generateRoomId() {
-  return `room-${crypto.randomUUID()}`;
-}
-
-/**
- * Generate a random shape ID similar to tldraw's format
- * @returns {string} Shape ID like "shape:Y59wm6acnQvwpBlp"
- */
-function generateShapeId() {
+function generateTldrawId(prefix, length) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
   let result = '';
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < length; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return `shape:${result}`;
+  return `${prefix}:${result}`;
 }
 
-/**
- * Generate a random page ID similar to tldraw's format
- * @returns {string} Page ID like "page:BjLIELOAtCOisIXsUlL_n"
- */
-function generatePageId() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-  let result = '';
-  for (let i = 0; i < 17; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return `page:${result}`;
-}
-
-/**
- * Generate a random canvas name
- * @returns {string} Canvas name like "Canvas-Alpha", "Workspace-Beta", etc.
- */
 function generateCanvasName() {
   const prefixes = ['Canvas', 'Workspace', 'Board', 'Space', 'Room', 'Area', 'Zone'];
   const suffixes = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Prime', 'Nova', 'Core', 'Hub', 'Lab', 'Studio'];
@@ -53,10 +24,6 @@ function generateCanvasName() {
   return `${prefix}-${suffix}`;
 }
 
-/**
- * Generate random position coordinates within reasonable bounds
- * @returns {object} Position object with x and y coordinates
- */
 function generateRandomPosition() {
   return {
     x: Math.random() * 1000 + 100, // Between 100 and 1100
@@ -94,18 +61,15 @@ function getParentInfo(parentRoomPath) {
  */
 function forceAddCanvasStateToGit(canvasStateFilePath) {
   try {
-    // Get the git root directory
     const gitRoot = execSync('git rev-parse --show-toplevel', { 
       cwd: path.dirname(canvasStateFilePath),
       encoding: 'utf8' 
     }).trim();
     
-    // Get relative path from git root
     const relativePath = path.relative(gitRoot, canvasStateFilePath);
     
     console.log(`📝 Force-adding canvas-state.json to git: ${relativePath}`);
     
-    // Force add the file (ignoring .gitignore)
     execSync(`git add -f "${relativePath}"`, { 
       cwd: gitRoot,
       stdio: 'inherit' 
@@ -118,9 +82,6 @@ function forceAddCanvasStateToGit(canvasStateFilePath) {
     console.warn(`   You may need to manually run: git add -f "${canvasStateFilePath}"`);
   }
 }
-
-// Note: Parent canvas-state.json update is handled automatically by generate-canvas.js
-// during pre-commit hook via canvas-link discovery from canvas-link-info.json files
 
 /**
  * Generate child room directory and files
@@ -136,31 +97,23 @@ function generateChildRoom(parentRoomPath) {
     process.exit(1);
   }
 
-  // Validate that the parent room path exists
   if (!fs.existsSync(parentRoomPath)) {
     console.error(`Error: Parent room directory does not exist: ${parentRoomPath}`);
     process.exit(1);
   }
 
-  // Get parent info
   const { parentPageId, parentRoomId } = getParentInfo(parentRoomPath);
 
-  // Generate random IDs and names
-  const childRoomId = generateRoomId();
+  const childRoomId = `room-${crypto.randomUUID()}`;
   const canvasName = generateCanvasName();
-  const pageId = generatePageId();
-  const linkShapeId = generateShapeId();
-  const position = generateRandomPosition();
+  const pageId = generateTldrawId('page', 17);
+  const linkShapeId = generateTldrawId('shape', 16);
 
   console.log(`Creating child room: ${childRoomId}`);
   console.log(`Parent Room Path: ${parentRoomPath}`);
   console.log(`Parent Room ID: ${parentRoomId}`);
   console.log(`Parent Page ID: ${parentPageId}`);
-  console.log(`Canvas Name: ${canvasName}`);
-  console.log(`Page ID: ${pageId}`);
-  console.log(`Link Shape ID: ${linkShapeId}`);
 
-  // Create child room directory
   const childRoomPath = path.join(parentRoomPath, childRoomId);
   if (!fs.existsSync(childRoomPath)) {
     fs.mkdirSync(childRoomPath, { recursive: true });
@@ -172,19 +125,14 @@ function generateChildRoom(parentRoomPath) {
   const globalStorage = {};
   fs.writeFileSync(path.join(childRoomPath, 'global-storage.json'), JSON.stringify(globalStorage, null, 2));
 
-  // 2. Create empty canvas-state.json (will be populated by generate-canvas.js during pre-commit)
-  // We only need this file to exist so we can force-commit it to bypass .gitignore
-  const emptyCanvasState = {};
-  fs.writeFileSync(path.join(childRoomPath, 'canvas-state.json'), JSON.stringify(emptyCanvasState, null, 2));
+  // 2. Create empty canvas-state.json, we only need this file to exist so we can force-commit and bypass .gitignore
+  fs.writeFileSync(path.join(childRoomPath, 'canvas-state.json'), JSON.stringify({}, null, 2));
 
   // 3. Create canvas-link-info.json
   const canvasLinkInfo = {
     parentCanvasId: parentRoomId,
     linkShapeId: linkShapeId,
-    position: {
-      x: position.x,
-      y: position.y
-    },
+    position: generateRandomPosition(),
     size: {
       w: 200,
       h: 100
@@ -266,13 +214,8 @@ function generateChildRoom(parentRoomPath) {
 
   console.log('\n✅ Child room files created successfully:');
   console.log(`📁 Directory: ${childRoomPath}`);
-  console.log(`📄 global-storage.json - Empty storage object`);
-  console.log(`📄 canvas-state.json - Empty placeholder (will be generated by pre-commit hook)`);
-  console.log(`📄 canvas-link-info.json - Link information for parent canvas`);
-  console.log(`📄 canvas-metadata.json - Canvas metadata and configuration`);
 
   // 5. Force-add the child room's canvas-state.json to git
-  // Note: Parent canvas-state.json will be automatically updated by generate-canvas.js during pre-commit
   const childCanvasStatePath = path.join(childRoomPath, 'canvas-state.json');
   forceAddCanvasStateToGit(childCanvasStatePath);
 
